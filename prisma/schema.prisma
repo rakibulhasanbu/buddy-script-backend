@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model VerificationOtp {
+  id        String           @id @default(uuid())
+  type      EVerificationOtp
+  otp       Int
+  createdAt DateTime         @default(now())
+  ownById   String
+  ownBy     User             @relation(fields: [ownById], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id              String            @id @unique @default(uuid())
+  name            String
+  email           String            @unique
+  password        String?
+  photoUrl        String?           @default("https://i.ibb.co.com/mJrrGf8/Whats-App-Image-2025-01-17-at-11-15-33-AM.jpg")
+  loginProvider   ELoginProvider    @default(normalEmail)
+  role            EUserRole         @default(USER)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  isBlocked       Boolean           @default(false)
+  isVerified      Boolean           @default(false)
+  gId             String?           @unique
+  pdfSettings     Json?             @default("{}")
+  verificationOtp VerificationOtp[]
+  uploadedImage   UploadedImage[]
+}
+
+model UploadedImage {
+  id        String           @id @unique @default(uuid())
+  type      EUploadImageType @default(other)
+  url       String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum EUserRole {
+  SUPER_ADMIN
+  ADMIN
+  USER
+  SELLER
+  EMPLOYEE
+}
+
+enum ELoginProvider {
+  google
+  normalEmail
+}
+
+enum EVerificationOtp {
+  createUser
+  forgotPassword
+  deleteUser
+  adminLogin
+}
+
+enum EUploadImageType {
+  product
+  other
+}

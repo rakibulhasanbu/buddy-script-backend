@@ -1,631 +1,129 @@
-import { Prisma, EUserRole, EVerificationOtp, User } from "@prisma/client";
 import bcryptjs from "bcryptjs";
 import httpStatus from "http-status";
 import { Secret } from "jsonwebtoken";
 import config from "@/config";
 import { ApiError } from "@/errors/api-error";
 import prisma from "@/lib/prisma";
-import EmailTemplates from "@/services/email.templates";
-import sendEmail from "@/services/email.service";
 import { createBcryptPassword } from "@/utils/password";
-import { generateOTP, checkTimeOfOTP } from "@/utils/generate-otp";
 import { jwtHelpers } from "@/utils/jwt";
 import {
-  AdminLoginInput,
-  GoogleLoginInput,
+  ChangePasswordInput,
   LoginInput,
   LoginResponse,
   RefreshTokenResponse,
-  VerifyTokenResponse,
+  SignupInput,
+  UserResponse,
 } from "./auth.types";
 
-const createUser = async (user: User): Promise<LoginResponse> => {
-  const { password: givenPassword, ...rest } = user;
-  if (!givenPassword) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Password is required");
-  }
-  const otp = generateOTP();
-  const hashedPassword = await createBcryptPassword(givenPassword);
+const buildUserResponse = (user: { id: string; firstName: string; lastName: string; email: string }): UserResponse => {
+  return {
+    ...user,
+    name: `${user.firstName} ${user.lastName}`,
+  } as UserResponse;
+};
 
-  const isUserExist = await prisma.user.findUnique({
-    where: { email: user.email },
-  });
-
-  if (isUserExist?.id && isUserExist.isVerified) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, "User already exists");
-  }
-
-  const dataToCreate = {
-    password: hashedPassword,
-    ...rest,
-    role: rest.email === config.mainAdminEmail ? EUserRole.SUPER_ADMIN : EUserRole.USER,
-    isVerified: false,
-    isBlocked: false,
-  };
-
-  const newUser = await prisma.$transaction(async tx => {
-    if (isUserExist?.id && !isUserExist.isVerified) {
-      await tx.verificationOtp.deleteMany({
-        where: { ownById: isUserExist.id },
-      });
-      await tx.user.delete({ where: { id: isUserExist.id } });
-    }
-
-    const newUserInfo = await tx.user.create({
-      data: dataToCreate as Prisma.UserCreateInput,
-    });
-
-    await tx.verificationOtp.create({
-      data: {
-        ownById: newUserInfo.id,
-        otp: otp,
-        type: EVerificationOtp.createUser,
-      },
-    });
-
-    return newUserInfo;
-  });
-
-  if (!newUser?.id) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "failed to create user");
-  }
-
-  // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
-  const { password, id, email, name, ...others } = newUser;
-
+const createTokenPair = (userId: string, role: string) => {
   const accessToken = jwtHelpers.createToken(
-    { userId: id, role: newUser.role },
+    { userId, role },
     config.jwt.secret as Secret,
     config.jwt.expires_in as string,
   );
-
   const refreshToken = jwtHelpers.createToken(
-    { userId: id, role: newUser.role },
+    { userId, role },
     config.jwt.refresh_secret as Secret,
     config.jwt.refresh_expires_in as string,
   );
+  return { accessToken, refreshToken };
+};
+
+const signup = async (payload: SignupInput): Promise<LoginResponse> => {
+  const { firstName, lastName, email, password } = payload;
+
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser) {
+    throw new ApiError(httpStatus.CONFLICT, "User already exists");
+  }
+
+  const hashedPassword = await createBcryptPassword(password);
+
+  const user = await prisma.user.create({
+    data: {
+      firstName,
+      lastName,
+      email,
+      password: hashedPassword,
+      role: email === config.mainAdminEmail ? "SUPER_ADMIN" : "USER",
+      isBlocked: false,
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      role: true,
+      photoUrl: true,
+      isBlocked: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  const { accessToken, refreshToken } = createTokenPair(user.id, user.role);
 
   return {
-    user: { email, id, name, ...others },
     accessToken,
     refreshToken,
-    otp,
+    user: buildUserResponse(user),
   };
 };
 
-const loginUser = async (payload: LoginInput): Promise<LoginResponse> => {
-  const { email: givenEmail, password } = payload;
-  const isUserExist = await prisma.user.findUnique({
-    where: { email: givenEmail },
+const login = async (payload: LoginInput): Promise<LoginResponse> => {
+  const { email, password } = payload;
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      password: true,
+      role: true,
+      photoUrl: true,
+      isBlocked: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
-
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User does not exist");
-  }
-
-  if (isUserExist.password && !(await bcryptjs.compare(password, isUserExist.password))) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, "Password is incorrect");
-  }
-
-  const { email, id, role, name, ...others } = isUserExist;
-
-  const accessToken = jwtHelpers.createToken(
-    { userId: id, role },
-    config.jwt.secret as Secret,
-    config.jwt.expires_in as string,
-  );
-
-  const refreshToken = jwtHelpers.createToken(
-    { userId: id, role },
-    config.jwt.refresh_secret as Secret,
-    config.jwt.refresh_expires_in as string,
-  );
-
-  return {
-    user: { email, id, name, role, ...others },
-    accessToken,
-    refreshToken,
-  };
-};
-
-const googleLoginUser = async (payload: GoogleLoginInput): Promise<LoginResponse> => {
-  const { email: givenEmail, photoUrl, gId, name: givenName } = payload;
-  let user: User;
-  const isUserExist = await prisma.user.findUnique({
-    where: { email: givenEmail },
-  });
-
-  if (!isUserExist) {
-    const hashedGid = await createBcryptPassword(gId);
-    const newUser = await prisma.user.create({
-      data: {
-        email: givenEmail,
-        name: givenName || "unknown",
-        photoUrl,
-        gId: hashedGid,
-        role: EUserRole.USER,
-        isVerified: true,
-        isBlocked: false,
-        loginProvider: "google",
-      },
-    });
-    user = newUser;
-  } else {
-    const hashedGid = await createBcryptPassword(gId);
-
-    if (!isUserExist.gId) {
-      const updateUserGId = await prisma.user.update({
-        where: { email: givenEmail },
-        data: { gId: hashedGid },
-      });
-      user = updateUserGId;
-    } else {
-      if (!(await bcryptjs.compare(gId, isUserExist.gId))) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, "User Gid does not match!");
-      }
-      user = isUserExist;
-    }
-  }
 
   if (!user) {
     throw new ApiError(httpStatus.NOT_FOUND, "User does not exist");
   }
 
-  const { email, id, role, name, ...others } = user;
-
-  const accessToken = jwtHelpers.createToken(
-    { userId: id, role },
-    config.jwt.secret as Secret,
-    config.jwt.expires_in as string,
-  );
-
-  const refreshToken = jwtHelpers.createToken(
-    { userId: id, role },
-    config.jwt.refresh_secret as Secret,
-    config.jwt.refresh_expires_in as string,
-  );
-
-  return {
-    user: { email, id, name, role, ...others },
-    accessToken,
-    refreshToken,
-  };
-};
-
-const loginAdmin = async (payload: LoginInput): Promise<{ otp: string }> => {
-  const { email: givenEmail, password } = payload;
-  const isUserExist = await prisma.user.findUnique({
-    where: { email: givenEmail },
-  });
-
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User does not exist");
+  if (user.isBlocked) {
+    throw new ApiError(httpStatus.FORBIDDEN, "User is blocked");
   }
 
-  if (isUserExist.password && !(await bcryptjs.compare(password, isUserExist.password))) {
+  if (!(await bcryptjs.compare(password, user.password))) {
     throw new ApiError(httpStatus.UNAUTHORIZED, "Password is incorrect");
   }
 
-  const { email, role } = isUserExist;
-
-  if (role === EUserRole.USER) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Your are not a admin");
-  }
-
-  const otp = generateOTP();
-  const verificationOtp = await prisma.$transaction(async tx => {
-    await tx.verificationOtp.deleteMany({
-      where: { ownById: isUserExist.id },
-    });
-    return tx.verificationOtp.create({
-      data: {
-        ownById: isUserExist.id,
-        otp: otp,
-        type: EVerificationOtp.adminLogin,
-      },
-    });
-  });
-
-  if (!verificationOtp.otp) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Failed to generate otp");
-  }
-
-  await sendEmail(
-    { to: email },
-    {
-      subject: EmailTemplates.adminLogin.subject,
-      html: EmailTemplates.adminLogin.html({ token: otp }),
-    },
-  );
-
-  return { otp: "otp send" };
-};
-
-const verifyOtpForAdminLogin = async (payload: AdminLoginInput): Promise<LoginResponse> => {
-  const { email: givenEmail, password } = payload;
-  const isUserExist = await prisma.user.findUnique({
-    where: { email: givenEmail },
-  });
-
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User does not exist");
-  }
-
-  if (isUserExist.password && !(await bcryptjs.compare(password, isUserExist.password))) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, "Password is incorrect");
-  }
-
-  const isTokenExit = await prisma.verificationOtp.findFirst({
-    where: {
-      ownById: isUserExist.id,
-      otp: payload.otp,
-      type: EVerificationOtp.adminLogin,
-    },
-  });
-
-  if (!isTokenExit) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, "OTP is not match");
-  }
-
-  if (checkTimeOfOTP(isTokenExit.createdAt)) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, "OPT is expired!");
-  }
-
-  const { email, id, role, name, ...others } = isUserExist;
-
-  const accessToken = jwtHelpers.createToken(
-    { userId: id, role },
-    config.jwt.secret as Secret,
-    config.jwt.expires_in as string,
-  );
-
-  const refreshToken = jwtHelpers.createToken(
-    { userId: id, role },
-    config.jwt.refresh_secret as Secret,
-    config.jwt.refresh_expires_in as string,
-  );
+  const { accessToken, refreshToken } = createTokenPair(user.id, user.role);
 
   return {
-    user: { email, id, name, role, ...others },
     accessToken,
     refreshToken,
-  };
-};
-
-const resendEmail = async (givenEmail: string): Promise<LoginResponse> => {
-  const isUserExist = await prisma.user.findUnique({
-    where: { email: givenEmail },
-  });
-
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
-  }
-
-  if (isUserExist?.isVerified) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "User already verified");
-  }
-
-  const otp = generateOTP();
-  const { email, id, role, name, ...others } = isUserExist;
-
-  const accessToken = jwtHelpers.createToken(
-    { userId: id, role },
-    config.jwt.secret as Secret,
-    config.jwt.expires_in as string,
-  );
-
-  const verificationOtp = await prisma.$transaction(async tx => {
-    await tx.verificationOtp.deleteMany({
-      where: { ownById: isUserExist.id },
-    });
-    return tx.verificationOtp.create({
-      data: {
-        ownById: isUserExist.id,
-        otp: otp,
-        type: EVerificationOtp.createUser,
-      },
-    });
-  });
-
-  if (!verificationOtp.id) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Cannot create verification Otp");
-  }
-
-  const refreshToken = jwtHelpers.createToken(
-    { userId: id, role },
-    config.jwt.refresh_secret as Secret,
-    config.jwt.refresh_expires_in as string,
-  );
-
-  return {
-    user: { email, id, name, role, ...others },
-    accessToken,
-    refreshToken,
-    otp,
-  };
-};
-
-const sendForgotEmail = async (givenEmail: string): Promise<{ otp: number }> => {
-  const isUserExist = await prisma.user.findUnique({
-    where: { email: givenEmail },
-  });
-
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
-  }
-
-  const otp = generateOTP();
-  const { email } = isUserExist;
-
-  const verificationOtp = await prisma.$transaction(async tx => {
-    await tx.verificationOtp.deleteMany({
-      where: { ownById: isUserExist.id },
-    });
-    return tx.verificationOtp.create({
-      data: {
-        ownById: isUserExist.id,
-        otp: otp,
-        type: EVerificationOtp.forgotPassword,
-      },
-    });
-  });
-
-  if (!verificationOtp.id) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Cannot create verification Otp");
-  }
-
-  await sendEmail(
-    { to: email },
-    {
-      subject: EmailTemplates.verifyForgot.subject,
-      html: EmailTemplates.verifyForgot.html({ token: otp }),
-    },
-  );
-
-  return { otp };
-};
-
-const sendDeleteUserEmail = async (givenEmail: string): Promise<{ otp: number }> => {
-  const isUserExist = await prisma.user.findUnique({
-    where: { email: givenEmail },
-  });
-
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
-  }
-
-  const otp = generateOTP();
-  const { email } = isUserExist;
-
-  const verificationOtp = await prisma.$transaction(async tx => {
-    await tx.verificationOtp.deleteMany({
-      where: { ownById: isUserExist.id },
-    });
-    return tx.verificationOtp.create({
-      data: {
-        ownById: isUserExist.id,
-        otp: otp,
-        type: EVerificationOtp.deleteUser,
-      },
-    });
-  });
-
-  if (!verificationOtp.id) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Cannot create verification Otp");
-  }
-
-  await sendEmail(
-    { to: email },
-    {
-      subject: EmailTemplates.deleteUser.subject,
-      html: EmailTemplates.deleteUser.html({ token: otp }),
-    },
-  );
-
-  return { otp };
-};
-
-const verifySignupToken = async (token: number, userId: string): Promise<VerifyTokenResponse> => {
-  const isUserExist = await prisma.user.findUnique({ where: { id: userId } });
-
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User does not exist");
-  }
-
-  const isTokenExit = await prisma.verificationOtp.findFirst({
-    where: {
-      ownById: userId,
-      otp: token,
-      type: EVerificationOtp.createUser,
-    },
-  });
-
-  if (!isTokenExit) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, "OTP is not match");
-  }
-
-  if (checkTimeOfOTP(isTokenExit.createdAt)) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, "OPT is expired!");
-  }
-
-  await prisma.verificationOtp.deleteMany({
-    where: { ownById: isUserExist.id },
-  });
-
-  const result = await prisma.user.update({
-    where: { id: isUserExist.id },
-    data: { isVerified: true },
-  });
-
-  if (!result) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "user not found");
-  }
-
-  const newAccessToken = jwtHelpers.createToken(
-    {
-      userId: result.id,
-      role: result.role,
-    },
-    config.jwt.secret as Secret,
-    config.jwt.expires_in as string,
-  );
-
-  const refreshToken = jwtHelpers.createToken(
-    { userId: result.id, role: result.role },
-    config.jwt.refresh_secret as Secret,
-    config.jwt.refresh_expires_in as string,
-  );
-
-  // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
-  const { password, ...rest } = result;
-
-  return {
-    accessToken: newAccessToken,
-    refreshToken,
-    user: { ...rest },
-  };
-};
-
-const verifyDeleteUserToken = async (
-  token: number,
-  userEmail: string,
-): Promise<{ token: number; isValidate: boolean; deletedUserId: string }> => {
-  const isUserExist = await prisma.user.findUnique({
-    where: { email: userEmail },
-  });
-
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User does not exist");
-  }
-
-  const isTokenExit = await prisma.verificationOtp.findFirst({
-    where: {
-      ownById: isUserExist.id,
-      otp: token,
-      type: EVerificationOtp.deleteUser,
-    },
-  });
-
-  if (!isTokenExit) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, "OTP is not match");
-  }
-
-  if (checkTimeOfOTP(isTokenExit.createdAt)) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, "OPT is expired!");
-  }
-
-  const deletedUser = await prisma.user.delete({
-    where: { id: isUserExist.id },
-  });
-
-  if (!deletedUser.id) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Failed to delete");
-  }
-
-  return {
-    token,
-    isValidate: true,
-    deletedUserId: deletedUser.id,
-  };
-};
-
-const verifyForgotToken = async (token: number, userEmail: string): Promise<{ token: number; isValidate: boolean }> => {
-  const isUserExist = await prisma.user.findUnique({
-    where: { email: userEmail },
-  });
-
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User does not exist");
-  }
-
-  const isTokenExit = await prisma.verificationOtp.findFirst({
-    where: {
-      ownById: isUserExist.id,
-      otp: token,
-      type: EVerificationOtp.forgotPassword,
-    },
-  });
-
-  if (!isTokenExit) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, "OTP is not match");
-  }
-
-  if (checkTimeOfOTP(isTokenExit.createdAt)) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, "OPT is expired!");
-  }
-
-  return {
-    token,
-    isValidate: true,
-  };
-};
-
-const changePassword = async ({
-  password,
-  email,
-  otp,
-}: {
-  password: string;
-  email: string;
-  otp: number;
-}): Promise<LoginResponse> => {
-  const hashedPassword = await createBcryptPassword(password);
-
-  const isUserExist = await prisma.user.findUnique({
-    where: { email },
-  });
-
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "User not found");
-  }
-
-  const isTokenExit = await prisma.verificationOtp.findFirst({
-    where: {
-      ownById: isUserExist.id,
-      otp,
-      type: EVerificationOtp.forgotPassword,
-    },
-  });
-
-  if (!isTokenExit) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, "OTP is not match");
-  }
-
-  if (checkTimeOfOTP(isTokenExit.createdAt)) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, "OPT is expired!");
-  }
-
-  const result = await prisma.$transaction(async tx => {
-    await tx.verificationOtp.deleteMany({
-      where: { ownById: isUserExist.id },
-    });
-    return tx.user.update({
-      where: { id: isUserExist.id },
-      data: { password: hashedPassword },
-    });
-  });
-
-  if (!result) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Something went wrong");
-  }
-
-  const accessToken = jwtHelpers.createToken(
-    { userId: isUserExist.id, role: isUserExist.role },
-    config.jwt.secret as Secret,
-    config.jwt.expires_in as string,
-  );
-
-  const refreshToken = jwtHelpers.createToken(
-    { userId: isUserExist.id, role: isUserExist.role },
-    config.jwt.refresh_secret as Secret,
-    config.jwt.refresh_expires_in as string,
-  );
-
-  return {
-    user: { ...result },
-    accessToken,
-    refreshToken,
-    otp,
+    user: buildUserResponse({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role,
+      photoUrl: user.photoUrl,
+      isBlocked: user.isBlocked,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }),
   };
 };
 
@@ -634,50 +132,94 @@ const refreshToken = async (token: string): Promise<RefreshTokenResponse> => {
   try {
     verifiedToken = jwtHelpers.verifyToken(token, config.jwt.refresh_secret as Secret);
   } catch {
-    throw new ApiError(httpStatus.FORBIDDEN, "Invalid Refresh Token");
+    throw new ApiError(httpStatus.FORBIDDEN, "Invalid refresh token");
   }
 
-  const { userId: idToken } = verifiedToken;
-
-  const isUserExist = await prisma.user.findUnique({
-    where: { id: idToken },
+  const user = await prisma.user.findUnique({
+    where: { id: verifiedToken.userId },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      role: true,
+      photoUrl: true,
+      isBlocked: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
-  if (!isUserExist) {
+  if (!user) {
     throw new ApiError(httpStatus.NOT_FOUND, "User does not exist");
   }
 
-  const newAccessToken = jwtHelpers.createToken(
-    {
-      userId: isUserExist.id,
-      role: isUserExist.role,
-    },
-    config.jwt.secret as Secret,
-    config.jwt.expires_in as string,
-  );
-
-  // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
-  const { email, id, role, name, password, ...others } = isUserExist;
+  const { accessToken } = createTokenPair(user.id, user.role);
 
   return {
-    accessToken: newAccessToken,
+    accessToken,
     refreshToken: token,
-    user: { email, id, role, name, ...others },
+    user: buildUserResponse(user),
+  };
+};
+
+const changePassword = async (payload: ChangePasswordInput): Promise<LoginResponse> => {
+  const { email, oldPassword, newPassword } = payload;
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      password: true,
+      role: true,
+      photoUrl: true,
+      isBlocked: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, "User does not exist");
+  }
+
+  if (!(await bcryptjs.compare(oldPassword, user.password))) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Old password is incorrect");
+  }
+
+  const hashedPassword = await createBcryptPassword(newPassword);
+
+  const updatedUser = await prisma.user.update({
+    where: { id: user.id },
+    data: { password: hashedPassword },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      role: true,
+      photoUrl: true,
+      isBlocked: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  const { accessToken, refreshToken } = createTokenPair(updatedUser.id, updatedUser.role);
+
+  return {
+    accessToken,
+    refreshToken,
+    user: buildUserResponse(updatedUser),
   };
 };
 
 export const AuthService = {
-  createUser,
-  loginUser,
+  signup,
+  login,
   refreshToken,
-  verifySignupToken,
-  resendEmail,
-  sendForgotEmail,
-  verifyForgotToken,
   changePassword,
-  sendDeleteUserEmail,
-  verifyDeleteUserToken,
-  loginAdmin,
-  verifyOtpForAdminLogin,
-  googleLoginUser,
 };

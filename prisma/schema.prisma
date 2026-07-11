@@ -6,31 +6,21 @@ datasource db {
   provider = "postgresql"
 }
 
-model VerificationOtp {
-  id        String           @id @default(uuid())
-  type      EVerificationOtp
-  otp       Int
-  createdAt DateTime         @default(now())
-  ownById   String
-  ownBy     User             @relation(fields: [ownById], references: [id], onDelete: Cascade)
-}
-
 model User {
-  id              String            @id @unique @default(uuid())
-  name            String
-  email           String            @unique
-  password        String?
-  photoUrl        String?           @default("https://i.ibb.co.com/mJrrGf8/Whats-App-Image-2025-01-17-at-11-15-33-AM.jpg")
-  loginProvider   ELoginProvider    @default(normalEmail)
-  role            EUserRole         @default(USER)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  isBlocked       Boolean           @default(false)
-  isVerified      Boolean           @default(false)
-  gId             String?           @unique
-  pdfSettings     Json?             @default("{}")
-  verificationOtp VerificationOtp[]
-  uploadedImage   UploadedImage[]
+  id            String          @id @unique @default(uuid())
+  firstName     String
+  lastName      String
+  email         String          @unique
+  password      String
+  photoUrl      String?         @default("https://i.ibb.co.com/mJrrGf8/Whats-App-Image-2025-01-17-at-11-15-33-AM.jpg")
+  role          EUserRole       @default(USER)
+  isBlocked     Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  posts         Post[]
+  comments      Comment[]
+  reactions     Reaction[]
+  uploadedImage UploadedImage[]
 }
 
 model UploadedImage {
@@ -43,6 +33,55 @@ model UploadedImage {
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model Post {
+  id             String      @id @default(uuid())
+  authorId       String
+  content        String      @db.Text
+  imageUrl       String?
+  visibility     EVisibility @default(PUBLIC)
+  reactionCounts Json        @default("{}")
+  commentCount   Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  author         User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments       Comment[]
+
+  @@index([createdAt])
+  @@index([authorId, createdAt])
+}
+
+model Comment {
+  id             String    @id @default(uuid())
+  postId         String
+  authorId       String
+  parentId       String?
+  content        String    @db.Text
+  reactionCounts Json      @default("{}")
+  replyCount     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  post           Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author         User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent         Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies        Comment[] @relation("CommentReplies")
+
+  @@index([postId, parentId, createdAt])
+  @@index([parentId, createdAt])
+}
+
+model Reaction {
+  id         String          @id @default(uuid())
+  userId     String
+  entityType EReactionEntity
+  entityId   String
+  type       EReactionType
+  createdAt  DateTime        @default(now())
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityType, entityId])
+  @@index([entityType, entityId])
+}
+
 enum EUserRole {
   SUPER_ADMIN
   ADMIN
@@ -51,19 +90,26 @@ enum EUserRole {
   EMPLOYEE
 }
 
-enum ELoginProvider {
-  google
-  normalEmail
-}
-
-enum EVerificationOtp {
-  createUser
-  forgotPassword
-  deleteUser
-  adminLogin
-}
-
 enum EUploadImageType {
   product
   other
+}
+
+enum EVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum EReactionEntity {
+  POST
+  COMMENT
+}
+
+enum EReactionType {
+  LIKE
+  LOVE
+  HAHA
+  WOW
+  SAD
+  ANGRY
 }

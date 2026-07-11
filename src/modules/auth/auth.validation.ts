@@ -1,81 +1,38 @@
-import { ELoginProvider, EUserRole } from "@prisma/client";
 import { z } from "zod";
 
-const createAuthZodSchema = z.object({
+const signupZodSchema = z.object({
   body: z.object({
-    email: z.string({ required_error: "Email is required" }),
+    firstName: z.string({ required_error: "First name is required" }).min(1),
+    lastName: z.string({ required_error: "Last name is required" }).min(1),
+    email: z.string({ required_error: "Email is required" }).email(),
     password: z.string({ required_error: "Password is required" }).min(8),
-    name: z.string({ required_error: "Name is required" }),
-    loginProvider: z
-      .enum([...Object.keys(ELoginProvider)] as [string, ...string[]])
-      .default(ELoginProvider.normalEmail)
-      .optional(),
-    role: z.nativeEnum(EUserRole).default(EUserRole.USER).optional(),
   }),
 });
 
 const loginZodSchema = z.object({
   body: z.object({
-    email: z.string({ required_error: "Email is required!" }),
+    email: z.string({ required_error: "Email is required" }).email(),
     password: z.string({ required_error: "Password is required" }),
-  }),
-});
-
-const googleLoginZodSchema = z.object({
-  body: z.object({
-    email: z.string({ required_error: "Email is required!" }),
-    gId: z.string({ required_error: "Password is required" }),
-    name: z.string({ required_error: "name is required" }).optional(),
-    photoUrl: z.string({ required_error: "Password is required" }).optional(),
-  }),
-});
-
-const loginAdminZodSchema = z.object({
-  body: z.object({
-    email: z.string({ required_error: "Email is required!" }),
-    password: z.string({ required_error: "Password is required" }),
-    otp: z.number({ required_error: "otp is required" }),
   }),
 });
 
 const refreshTokenZodSchema = z.object({
   body: z.object({
-    refreshToken: z.string({
-      required_error: "Refresh Token is required",
-    }),
+    refreshToken: z.string({ required_error: "Refresh token is required" }),
   }),
 });
 
-const verifyToken = z.object({
+const changePasswordZodSchema = z.object({
   body: z.object({
-    token: z.number({ required_error: "Token is required" }),
-  }),
-});
-
-const verifyForgotToken = z.object({
-  body: z.object({
-    token: z.number({ required_error: "Token is required" }),
-    email: z.string({ required_error: "Email is required" }),
-  }),
-});
-
-const changePassword = z.object({
-  body: z.object({
-    token: z.number({ required_error: "Token is required" }),
-    email: z.string({ required_error: "Email is required" }),
-    password: z
-      .string({ required_error: "Password is required" })
-      .min(8, { message: "Password must be at least 8 characters long" }),
+    email: z.string({ required_error: "Email is required" }).email(),
+    oldPassword: z.string({ required_error: "Old password is required" }),
+    newPassword: z.string({ required_error: "New password is required" }).min(8),
   }),
 });
 
 export const AuthValidation = {
-  createAuthZodSchema,
-  refreshTokenZodSchema,
+  signupZodSchema,
   loginZodSchema,
-  verifyToken,
-  changePassword,
-  loginAdminZodSchema,
-  verifyForgotToken,
-  googleLoginZodSchema,
+  refreshTokenZodSchema,
+  changePasswordZodSchema,
 };

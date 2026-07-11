@@ -5,16 +5,8 @@ export type JwtPayload = {
   role: EUserRole;
 };
 
-export type RefreshTokenResponse = {
-  accessToken: string;
-  refreshToken: string;
-  user: Omit<User, "password">;
-};
-
-export type VerifyTokenResponse = {
-  accessToken: string;
-  refreshToken: string;
-  user: Omit<User, "password">;
+export type UserResponse = Omit<User, "password"> & {
+  name: string;
 };
 
 export type LoginInput = {
@@ -22,22 +14,27 @@ export type LoginInput = {
   password: string;
 };
 
-export type GoogleLoginInput = {
-  email: string;
-  name?: string;
-  photoUrl?: string;
-  gId: string;
-};
-
-export type AdminLoginInput = {
+export type SignupInput = {
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
-  otp: number;
+};
+
+export type ChangePasswordInput = {
+  email: string;
+  oldPassword: string;
+  newPassword: string;
 };
 
 export type LoginResponse = {
   accessToken: string;
-  user: Omit<User, "password">;
-  refreshToken?: string;
-  otp?: number;
+  refreshToken: string;
+  user: UserResponse;
+};
+
+export type RefreshTokenResponse = {
+  accessToken: string;
+  refreshToken: string;
+  user: UserResponse;
 };

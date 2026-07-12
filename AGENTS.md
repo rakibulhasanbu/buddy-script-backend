@@ -81,15 +81,17 @@ src/
 3. **Routes live in one place.** `src/routes.ts` imports and mounts all module routers. `app.ts` only imports `./routes`.
 
 4. **Use path aliases for cross-module imports.** All imports outside the current module should use `@/`:
+
    ```ts
-   import prisma from '@/lib/prisma';
-   import catchAsync from '@/middlewares/catch-async';
-   import ApiError from '@/errors/ApiError';
+   import prisma from "@/lib/prisma";
+   import catchAsync from "@/middlewares/catch-async";
+   import ApiError from "@/errors/ApiError";
    ```
 
 5. **Relative imports are allowed only inside the same module.** For example, in `src/modules/auth/auth.service.ts`:
+
    ```ts
-   import { AuthController } from './auth.controller'; // OK
+   import { AuthController } from "./auth.controller"; // OK
    ```
 
 6. **`lib/` holds infrastructure clients.** Prisma, Redis, and the logger live here. Modules should not import `@prisma/client` directly except for types; use `@/lib/prisma` for the client.
@@ -143,11 +145,11 @@ src/
 3. Use `@/` aliases for all cross-cutting imports.
 4. Register the router in `src/routes.ts`:
    ```ts
-   import { FeatureRoutes } from '@/modules/<feature>/<feature>.route';
+   import { FeatureRoutes } from "@/modules/<feature>/<feature>.route";
 
    const moduleRoutes = [
      // ...existing routes
-     { path: '/<feature>', route: FeatureRoutes },
+     { path: "/<feature>", route: FeatureRoutes },
    ];
    ```
 5. Run `pnpm run build` and `pnpm run lint:check` before committing.

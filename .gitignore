@@ -8,3 +8,4 @@ dist
 logs
 .pnpm-store
 pnpm-debug.log*
+draft

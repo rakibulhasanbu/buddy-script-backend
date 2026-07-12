@@ -1,7 +1,9 @@
 import express from "express";
 import { AuthRoutes } from "@/modules/auth/auth.route";
+import { CommentRoutes } from "@/modules/comment/comment.route";
 import { fileUploadRoutes } from "@/modules/file-upload/file-upload.route";
-import { UploadedImageRoutes } from "@/modules/uploaded-image/uploaded-image.route";
+import { PostRoutes } from "@/modules/post/post.route";
+import { ReactionRoutes } from "@/modules/reaction/reaction.route";
 
 const router = express.Router();
 
@@ -15,8 +17,16 @@ const moduleRoutes = [
     route: fileUploadRoutes,
   },
   {
-    path: "/uploaded-images",
-    route: UploadedImageRoutes,
+    path: "/posts",
+    route: PostRoutes,
+  },
+  {
+    path: "/comments",
+    route: CommentRoutes,
+  },
+  {
+    path: "/reactions",
+    route: ReactionRoutes,
   },
 ];
 

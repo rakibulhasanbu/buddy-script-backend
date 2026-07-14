@@ -17,7 +17,4 @@ export default {
     refresh_expires_in: process.env.JWT_REFRESH_EXPIRES_IN,
   },
   mainAdminEmail: process.env.MAIN_ADMIN_EMAIL,
-  emailUser: process.env.EMAIL_USER,
-  emailUserPass: process.env.EMAIL_USER_PASS,
-  redisUrl: process.env.REDIS_URL,
 };

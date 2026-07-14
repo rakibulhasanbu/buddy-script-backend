@@ -1,14 +1,10 @@
-import { EFriendshipStatus } from "@prisma/client";
+import { EFriendshipStatus, ENotificationEntity, ENotificationType } from "@prisma/client";
 import httpStatus from "http-status";
 import { ApiError } from "@/errors/api-error";
 import prisma from "@/lib/prisma";
+import { NotificationService } from "@/modules/notification/notification.service";
 
-import {
-  FriendListResponse,
-  FriendshipResponse,
-  SendRequestInput,
-  SuggestionListResponse,
-} from "./friendship.types";
+import { FriendListResponse, FriendshipResponse, SendRequestInput, SuggestionListResponse } from "./friendship.types";
 
 const userSelect = {
   id: true,
@@ -81,6 +77,14 @@ const sendRequest = async (currentUserId: string, payload: SendRequestInput): Pr
     },
   });
 
+  await NotificationService.createNotification({
+    userId: addresseeId,
+    actorId: currentUserId,
+    type: ENotificationType.FRIEND_REQUEST,
+    entityType: ENotificationEntity.FRIENDSHIP,
+    entityId: friendship.id,
+  });
+
   return buildFriendshipResponse(friendship);
 };
 
@@ -112,6 +116,15 @@ const acceptRequest = async (currentUserId: string, friendshipId: string): Promi
       requester: { select: userSelect },
       addressee: { select: userSelect },
     },
+  });
+
+  await NotificationService.deleteFriendRequestNotification(existing.requesterId, currentUserId);
+  await NotificationService.createNotification({
+    userId: existing.requesterId,
+    actorId: currentUserId,
+    type: ENotificationType.FRIEND_REQUEST_ACCEPTED,
+    entityType: ENotificationEntity.FRIENDSHIP,
+    entityId: friendship.id,
   });
 
   return buildFriendshipResponse(friendship);
@@ -147,6 +160,8 @@ const declineRequest = async (currentUserId: string, friendshipId: string): Prom
     },
   });
 
+  await NotificationService.deleteFriendRequestNotification(existing.requesterId, currentUserId);
+
   return buildFriendshipResponse(friendship);
 };
 
@@ -161,6 +176,7 @@ const cancelRequest = async (currentUserId: string, friendshipId: string): Promi
     throw new ApiError(httpStatus.FORBIDDEN, "You are not authorized to cancel this request");
   }
 
+  await NotificationService.deleteFriendRequestNotification(existing.requesterId, existing.addresseeId);
   await prisma.friendship.delete({ where: { id: friendshipId } });
 };
 
@@ -208,7 +224,7 @@ const getSuggestions = async (currentUserId: string): Promise<SuggestionListResp
   });
 
   const excludedIds = new Set<string>([currentUserId]);
-  connectedUserIds.forEach((friendship) => {
+  connectedUserIds.forEach(friendship => {
     excludedIds.add(friendship.requesterId);
     excludedIds.add(friendship.addresseeId);
   });

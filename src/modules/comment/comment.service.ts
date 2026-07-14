@@ -1,7 +1,8 @@
-import { Comment, EVisibility, Prisma } from "@prisma/client";
+import { Comment, ENotificationEntity, ENotificationType, EVisibility, Prisma } from "@prisma/client";
 import httpStatus from "http-status";
 import { ApiError } from "@/errors/api-error";
 import prisma from "@/lib/prisma";
+import { NotificationService } from "@/modules/notification/notification.service";
 import { ReactionService } from "@/modules/reaction/reaction.service";
 import { ReactionCounts } from "@/modules/reaction/reaction.types";
 import {
@@ -71,17 +72,21 @@ const assertPostAccessible = async (postId: string, userId: string) => {
   if (post.visibility === EVisibility.PRIVATE && post.authorId !== userId) {
     throw new ApiError(httpStatus.FORBIDDEN, "You are not authorized to access this post");
   }
+
+  return post;
 };
 
 const createComment = async (payload: CreateCommentInput, authorId: string): Promise<CommentResponse> => {
   const { postId, parentId, content } = payload;
 
-  await assertPostAccessible(postId, authorId);
+  const post = await assertPostAccessible(postId, authorId);
+
+  let parentAuthorId: string | null = null;
 
   if (parentId) {
     const parent = await prisma.comment.findUnique({
       where: { id: parentId },
-      select: { id: true, postId: true },
+      select: { id: true, postId: true, authorId: true },
     });
 
     if (!parent) {
@@ -91,6 +96,8 @@ const createComment = async (payload: CreateCommentInput, authorId: string): Pro
     if (parent.postId !== postId) {
       throw new ApiError(httpStatus.BAD_REQUEST, "Parent comment does not belong to this post");
     }
+
+    parentAuthorId = parent.authorId;
   }
 
   const comment = await prisma.$transaction(async tx => {
@@ -127,6 +134,28 @@ const createComment = async (payload: CreateCommentInput, authorId: string): Pro
 
     return created;
   });
+
+  if (post.authorId !== authorId) {
+    await NotificationService.createNotification({
+      userId: post.authorId,
+      actorId: authorId,
+      type: ENotificationType.COMMENT_CREATED,
+      entityType: ENotificationEntity.COMMENT,
+      entityId: comment.id,
+      referenceId: postId,
+    });
+  }
+
+  if (parentAuthorId && parentAuthorId !== authorId && parentAuthorId !== post.authorId) {
+    await NotificationService.createNotification({
+      userId: parentAuthorId,
+      actorId: authorId,
+      type: ENotificationType.COMMENT_CREATED,
+      entityType: ENotificationEntity.COMMENT,
+      entityId: comment.id,
+      referenceId: postId,
+    });
+  }
 
   return buildCommentResponse(comment);
 };
@@ -315,6 +344,8 @@ const deleteComment = async (commentId: string, userId: string): Promise<void> =
 
     await tx.comment.delete({ where: { id: commentId } });
   });
+
+  await NotificationService.deleteNotificationsByEntity(ENotificationEntity.COMMENT, commentId);
 };
 
 export const CommentService = {

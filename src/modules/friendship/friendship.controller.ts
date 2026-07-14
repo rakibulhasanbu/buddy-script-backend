@@ -5,12 +5,7 @@ import { catchAsync } from "@/middlewares/catch-async";
 import { sendResponse } from "@/middlewares/send-response";
 
 import { FriendshipService } from "./friendship.service";
-import {
-  FriendListResponse,
-  FriendshipResponse,
-  SendRequestInput,
-  SuggestionListResponse,
-} from "./friendship.types";
+import { FriendListResponse, FriendshipResponse, SendRequestInput, SuggestionListResponse } from "./friendship.types";
 
 const sendRequest: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;

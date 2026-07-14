@@ -7,36 +7,38 @@ datasource db {
 }
 
 model User {
-  id                 String        @id @unique @default(uuid())
-  firstName          String
-  lastName           String
-  email              String        @unique
-  password           String
-  photoUrl           String?       @default("https://i.ibb.co.com/mJrrGf8/Whats-App-Image-2025-01-17-at-11-15-33-AM.jpg")
-  coverUrl           String?
-  bio                String?       @db.Text
-  role               EUserRole     @default(USER)
-  headline           String?       @db.VarChar(100)
-  isBlocked          Boolean       @default(false)
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-  posts              Post[]
-  comments           Comment[]
-  reactions          Reaction[]
-  uploadedImage      UploadedImage[]
-  sentFriendships    Friendship[]  @relation("SentFriendships")
-  receivedFriendships Friendship[] @relation("ReceivedFriendships")
+  id                    String          @id @unique @default(uuid())
+  firstName             String
+  lastName              String
+  email                 String          @unique
+  password              String
+  photoUrl              String?         @default("https://i.ibb.co.com/mJrrGf8/Whats-App-Image-2025-01-17-at-11-15-33-AM.jpg")
+  coverUrl              String?
+  bio                   String?         @db.Text
+  role                  EUserRole       @default(USER)
+  headline              String?         @db.VarChar(100)
+  isBlocked             Boolean         @default(false)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  posts                 Post[]
+  comments              Comment[]
+  reactions             Reaction[]
+  uploadedImage         UploadedImage[]
+  sentFriendships       Friendship[]    @relation("SentFriendships")
+  receivedFriendships   Friendship[]    @relation("ReceivedFriendships")
+  receivedNotifications Notification[]  @relation("ReceivedNotifications")
+  actorNotifications    Notification[]  @relation("ActorNotifications")
 }
 
 model Friendship {
-  id          String             @id @unique @default(uuid())
+  id          String            @id @unique @default(uuid())
   requesterId String
   addresseeId String
-  status      EFriendshipStatus  @default(PENDING)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  requester   User               @relation("SentFriendships", fields: [requesterId], references: [id], onDelete: Cascade)
-  addressee   User               @relation("ReceivedFriendships", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      EFriendshipStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  requester   User              @relation("SentFriendships", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee   User              @relation("ReceivedFriendships", fields: [addresseeId], references: [id], onDelete: Cascade)
 
   @@unique([requesterId, addresseeId])
   @@index([requesterId, addresseeId, status])
@@ -137,4 +139,40 @@ enum EReactionType {
   WOW
   SAD
   ANGRY
+}
+
+model Notification {
+  id          String               @id @default(uuid())
+  userId      String
+  actorId     String
+  type        ENotificationType
+  entityType  ENotificationEntity?
+  entityId    String?
+  referenceId String?
+  isRead      Boolean              @default(false)
+  readAt      DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  user  User @relation("ReceivedNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  actor User @relation("ActorNotifications", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+}
+
+enum ENotificationType {
+  FRIEND_REQUEST
+  FRIEND_REQUEST_ACCEPTED
+  POST_CREATED
+  COMMENT_CREATED
+  REACTION_ON_POST
+  REACTION_ON_COMMENT
+}
+
+enum ENotificationEntity {
+  POST
+  COMMENT
+  FRIENDSHIP
 }

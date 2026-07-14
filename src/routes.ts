@@ -3,6 +3,7 @@ import { AuthRoutes } from "@/modules/auth/auth.route";
 import { CommentRoutes } from "@/modules/comment/comment.route";
 import { fileUploadRoutes } from "@/modules/file-upload/file-upload.route";
 import { FriendshipRoutes } from "@/modules/friendship/friendship.route";
+import { NotificationRoutes } from "@/modules/notification/notification.route";
 import { PostRoutes } from "@/modules/post/post.route";
 import { ReactionRoutes } from "@/modules/reaction/reaction.route";
 import { UserRoutes } from "@/modules/user/user.route";
@@ -37,6 +38,10 @@ const moduleRoutes = [
   {
     path: "/friendships",
     route: FriendshipRoutes,
+  },
+  {
+    path: "/notifications",
+    route: NotificationRoutes,
   },
 ];
 

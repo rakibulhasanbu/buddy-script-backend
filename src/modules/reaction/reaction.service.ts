@@ -1,7 +1,8 @@
-import { EReactionEntity, EReactionType, Prisma } from "@prisma/client";
+import { ENotificationEntity, ENotificationType, EReactionEntity, EReactionType, Prisma } from "@prisma/client";
 import httpStatus from "http-status";
 import { ApiError } from "@/errors/api-error";
 import prisma from "@/lib/prisma";
+import { NotificationService } from "@/modules/notification/notification.service";
 import { ReactionCounts, ReactedUser, ToggleReactionInput, WhoReactedResponse } from "./reaction.types";
 
 const DEFAULT_PAGE_LIMIT = 20;
@@ -37,6 +38,15 @@ const toggleReaction = async (payload: ToggleReactionInput, userId: string) => {
 
   await assertEntityExists(entityType, entityId);
 
+  const entity =
+    entityType === EReactionEntity.POST
+      ? await prisma.post.findUnique({ where: { id: entityId }, select: { reactionCounts: true, authorId: true } })
+      : await prisma.comment.findUnique({ where: { id: entityId }, select: { reactionCounts: true, authorId: true } });
+
+  if (!entity) {
+    throw new ApiError(httpStatus.NOT_FOUND, `${entityType === EReactionEntity.POST ? "Post" : "Comment"} not found`);
+  }
+
   const result = await prisma.$transaction(async tx => {
     const existing = await tx.reaction.findUnique({
       where: {
@@ -47,15 +57,6 @@ const toggleReaction = async (payload: ToggleReactionInput, userId: string) => {
         },
       },
     });
-
-    const entity =
-      entityType === EReactionEntity.POST
-        ? await tx.post.findUnique({ where: { id: entityId }, select: { reactionCounts: true } })
-        : await tx.comment.findUnique({ where: { id: entityId }, select: { reactionCounts: true } });
-
-    if (!entity) {
-      throw new ApiError(httpStatus.NOT_FOUND, `${entityType === EReactionEntity.POST ? "Post" : "Comment"} not found`);
-    }
 
     const counts = getReactionCounts(entity.reactionCounts);
 
@@ -106,6 +107,29 @@ const toggleReaction = async (payload: ToggleReactionInput, userId: string) => {
 
     return { action: "added", type };
   });
+
+  if (result.action === "added" && entity) {
+    await NotificationService.upsertReactionNotification({
+      userId: entity.authorId,
+      actorId: userId,
+      type:
+        entityType === EReactionEntity.POST
+          ? ENotificationType.REACTION_ON_POST
+          : ENotificationType.REACTION_ON_COMMENT,
+      entityType: entityType === EReactionEntity.POST ? ENotificationEntity.POST : ENotificationEntity.COMMENT,
+      entityId,
+    });
+  }
+
+  if (result.action === "removed" && entity) {
+    await NotificationService.removeReactionNotification(
+      entity.authorId,
+      userId,
+      entityType === EReactionEntity.POST ? ENotificationType.REACTION_ON_POST : ENotificationType.REACTION_ON_COMMENT,
+      entityType === EReactionEntity.POST ? ENotificationEntity.POST : ENotificationEntity.COMMENT,
+      entityId,
+    );
+  }
 
   return result;
 };

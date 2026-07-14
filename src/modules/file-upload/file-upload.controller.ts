@@ -11,7 +11,7 @@ import { catchAsync } from "@/middlewares/catch-async";
 import { sendResponse } from "@/middlewares/send-response";
 
 export const uploadImageFile = catchAsync(
-  // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async (req: Request, res: Response, next: NextFunction) => {
     if (!req.file) {
       throw new ApiError(httpStatus.BAD_REQUEST, "No image found!");

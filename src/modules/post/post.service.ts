@@ -1,7 +1,8 @@
-import { EVisibility, Post, Prisma } from "@prisma/client";
+import { EFriendshipStatus, ENotificationEntity, ENotificationType, EVisibility, Post, Prisma } from "@prisma/client";
 import httpStatus from "http-status";
 import { ApiError } from "@/errors/api-error";
 import prisma from "@/lib/prisma";
+import { NotificationService } from "@/modules/notification/notification.service";
 import { ReactionService } from "@/modules/reaction/reaction.service";
 import { ReactionCounts } from "@/modules/reaction/reaction.types";
 import { CreatePostInput, FeedResponse, PostFilterOptions, PostResponse, UpdatePostInput } from "./post.types";
@@ -72,6 +73,37 @@ const createPost = async (payload: CreatePostInput, authorId: string): Promise<P
     },
   });
 
+  if (post.visibility === EVisibility.PUBLIC) {
+    const friendships = await prisma.friendship.findMany({
+      where: {
+        status: EFriendshipStatus.ACCEPTED,
+        OR: [{ requesterId: authorId }, { addresseeId: authorId }],
+      },
+      select: {
+        requesterId: true,
+        addresseeId: true,
+      },
+    });
+
+    const friendIds = friendships.map(friendship =>
+      friendship.requesterId === authorId ? friendship.addresseeId : friendship.requesterId,
+    );
+
+    const uniqueFriendIds = [...new Set(friendIds)];
+
+    if (uniqueFriendIds.length > 0) {
+      await NotificationService.createBulkNotifications(
+        uniqueFriendIds.map(friendId => ({
+          userId: friendId,
+          actorId: authorId,
+          type: ENotificationType.POST_CREATED,
+          entityType: ENotificationEntity.POST,
+          entityId: post.id,
+        })),
+      );
+    }
+  }
+
   return buildPostResponse(post);
 };
 
@@ -118,7 +150,11 @@ const getFeed = async (currentUserId: string, options: PostFilterOptions): Promi
   return { data, meta: { nextCursor } };
 };
 
-const getPostsByUserId = async (targetUserId: string, currentUserId: string, options: PostFilterOptions): Promise<FeedResponse> => {
+const getPostsByUserId = async (
+  targetUserId: string,
+  currentUserId: string,
+  options: PostFilterOptions,
+): Promise<FeedResponse> => {
   const limit = options.limit && options.limit > 0 && options.limit <= 50 ? options.limit : DEFAULT_PAGE_LIMIT;
   const cursor = options.cursor ? decodeCursor(options.cursor) : undefined;
 
@@ -236,6 +272,7 @@ const deletePost = async (postId: string, currentUserId: string): Promise<void> 
     throw new ApiError(httpStatus.FORBIDDEN, "You are not authorized to delete this post");
   }
 
+  await NotificationService.deleteNotificationsByEntity(ENotificationEntity.POST, postId);
   await prisma.post.delete({ where: { id: postId } });
 };
 

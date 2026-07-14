@@ -2,7 +2,6 @@ type TemplateData = {
   token: string | number | undefined;
 };
 
-/* eslint-disable no-unused-vars */
 type EmailTemplate = {
   subject: string;
   html: (_data: TemplateData) => string;

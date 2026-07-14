@@ -19,6 +19,4 @@ router.post(
   AuthController.changePassword,
 );
 
-router.post("/seed-users", AuthController.seed);
-
 export const AuthRoutes = router;

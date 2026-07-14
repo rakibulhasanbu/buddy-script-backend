@@ -4,7 +4,6 @@ import config from "@/config";
 import { catchAsync } from "@/middlewares/catch-async";
 import { sendResponse } from "@/middlewares/send-response";
 import { AuthService } from "./auth.service";
-import { seedUsers } from "./auth.seed";
 import { LoginResponse, RefreshTokenResponse } from "./auth.types";
 
 const cookieOptions = {
@@ -60,21 +59,9 @@ const changePassword: RequestHandler = catchAsync(async (req: Request, res: Resp
   });
 });
 
-const seed: RequestHandler = catchAsync(async (req: Request, res: Response) => {
-  const result = await seedUsers();
-
-  sendResponse<{ count: number }>(res, {
-    statusCode: httpStatus.CREATED,
-    success: true,
-    message: "Demo users seeded successfully",
-    data: { count: result.count },
-  });
-});
-
 export const AuthController = {
   signup,
   login,
   refreshToken,
   changePassword,
-  seed,
 };

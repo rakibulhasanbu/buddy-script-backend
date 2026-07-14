@@ -13,6 +13,8 @@ model User {
   email         String          @unique
   password      String
   photoUrl      String?         @default("https://i.ibb.co.com/mJrrGf8/Whats-App-Image-2025-01-17-at-11-15-33-AM.jpg")
+  coverUrl      String?
+  bio           String?         @db.Text
   role          EUserRole       @default(USER)
   isBlocked     Boolean         @default(false)
   createdAt     DateTime        @default(now())

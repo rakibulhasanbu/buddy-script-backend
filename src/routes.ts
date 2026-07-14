@@ -4,6 +4,7 @@ import { CommentRoutes } from "@/modules/comment/comment.route";
 import { fileUploadRoutes } from "@/modules/file-upload/file-upload.route";
 import { PostRoutes } from "@/modules/post/post.route";
 import { ReactionRoutes } from "@/modules/reaction/reaction.route";
+import { UserRoutes } from "@/modules/user/user.route";
 
 const router = express.Router();
 
@@ -27,6 +28,10 @@ const moduleRoutes = [
   {
     path: "/reactions",
     route: ReactionRoutes,
+  },
+  {
+    path: "/user",
+    route: UserRoutes,
   },
 ];
 

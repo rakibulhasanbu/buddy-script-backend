@@ -118,6 +118,50 @@ const getFeed = async (currentUserId: string, options: PostFilterOptions): Promi
   return { data, meta: { nextCursor } };
 };
 
+const getPostsByUserId = async (targetUserId: string, currentUserId: string, options: PostFilterOptions): Promise<FeedResponse> => {
+  const limit = options.limit && options.limit > 0 && options.limit <= 50 ? options.limit : DEFAULT_PAGE_LIMIT;
+  const cursor = options.cursor ? decodeCursor(options.cursor) : undefined;
+
+  const where: Prisma.PostWhereInput = {
+    authorId: targetUserId,
+    OR: [{ visibility: EVisibility.PUBLIC }, { authorId: currentUserId }],
+    ...(cursor && {
+      OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
+    }),
+  };
+
+  const posts = await prisma.post.findMany({
+    where,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    include: {
+      author: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          photoUrl: true,
+        },
+      },
+    },
+  });
+
+  const hasMore = posts.length > limit;
+  const items = hasMore ? posts.slice(0, -1) : posts;
+
+  const myReactions = await ReactionService.getUserReactionsForEntities(
+    "POST",
+    items.map(p => p.id),
+    currentUserId,
+  );
+
+  const data = items.map(post => buildPostResponse(post, myReactions.get(post.id) || null));
+  const nextCursor =
+    hasMore && items.length > 0 ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id) : null;
+
+  return { data, meta: { nextCursor } };
+};
+
 const getPostById = async (postId: string, currentUserId: string): Promise<PostResponse> => {
   const post = await prisma.post.findUnique({
     where: { id: postId },
@@ -198,6 +242,7 @@ const deletePost = async (postId: string, currentUserId: string): Promise<void> 
 export const PostService = {
   createPost,
   getFeed,
+  getPostsByUserId,
   getPostById,
   updatePost,
   deletePost,

@@ -15,7 +15,19 @@ import {
   UserResponse,
 } from "./auth.types";
 
-const buildUserResponse = (user: { id: string; firstName: string; lastName: string; email: string }): UserResponse => {
+const buildUserResponse = (user: {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  photoUrl: string | null;
+  coverUrl: string | null;
+  bio: string | null;
+  role: string;
+  isBlocked: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}): UserResponse => {
   return {
     ...user,
     name: `${user.firstName} ${user.lastName}`,
@@ -62,6 +74,8 @@ const signup = async (payload: SignupInput): Promise<LoginResponse> => {
       email: true,
       role: true,
       photoUrl: true,
+      coverUrl: true,
+      bio: true,
       isBlocked: true,
       createdAt: true,
       updatedAt: true,
@@ -90,6 +104,8 @@ const login = async (payload: LoginInput): Promise<LoginResponse> => {
       password: true,
       role: true,
       photoUrl: true,
+      coverUrl: true,
+      bio: true,
       isBlocked: true,
       createdAt: true,
       updatedAt: true,
@@ -120,6 +136,8 @@ const login = async (payload: LoginInput): Promise<LoginResponse> => {
       email: user.email,
       role: user.role,
       photoUrl: user.photoUrl,
+      coverUrl: user.coverUrl,
+      bio: user.bio,
       isBlocked: user.isBlocked,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -144,6 +162,8 @@ const refreshToken = async (token: string): Promise<RefreshTokenResponse> => {
       email: true,
       role: true,
       photoUrl: true,
+      coverUrl: true,
+      bio: true,
       isBlocked: true,
       createdAt: true,
       updatedAt: true,
@@ -176,6 +196,8 @@ const changePassword = async (payload: ChangePasswordInput): Promise<LoginRespon
       password: true,
       role: true,
       photoUrl: true,
+      coverUrl: true,
+      bio: true,
       isBlocked: true,
       createdAt: true,
       updatedAt: true,
@@ -202,6 +224,8 @@ const changePassword = async (payload: ChangePasswordInput): Promise<LoginRespon
       email: true,
       role: true,
       photoUrl: true,
+      coverUrl: true,
+      bio: true,
       isBlocked: true,
       createdAt: true,
       updatedAt: true,

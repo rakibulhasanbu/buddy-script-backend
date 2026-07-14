@@ -44,3 +44,5 @@ export type FeedResponse = {
     nextCursor: string | null;
   };
 };
+
+export type UserPostsResponse = FeedResponse;

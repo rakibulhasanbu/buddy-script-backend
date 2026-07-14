@@ -20,6 +20,13 @@ router.get(
   PostController.getFeed,
 );
 
+router.get(
+  "/user/:id",
+  auth("USER", "ADMIN", "SUPER_ADMIN"),
+  validateRequest(PostValidation.postFilterZodSchema),
+  PostController.getPostsByUser,
+);
+
 router.get("/:id", auth("USER", "ADMIN", "SUPER_ADMIN"), PostController.getPostById);
 
 router.patch(

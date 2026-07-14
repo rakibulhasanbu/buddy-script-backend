@@ -9,6 +9,8 @@ export type UserResponse = Omit<User, "password"> & {
   name: string;
 };
 
+export type PublicUserResponse = Omit<UserResponse, "email" | "isBlocked" | "updatedAt">;
+
 export type LoginInput = {
   email: string;
   password: string;

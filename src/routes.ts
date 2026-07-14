@@ -2,6 +2,7 @@ import express from "express";
 import { AuthRoutes } from "@/modules/auth/auth.route";
 import { CommentRoutes } from "@/modules/comment/comment.route";
 import { fileUploadRoutes } from "@/modules/file-upload/file-upload.route";
+import { FriendshipRoutes } from "@/modules/friendship/friendship.route";
 import { PostRoutes } from "@/modules/post/post.route";
 import { ReactionRoutes } from "@/modules/reaction/reaction.route";
 import { UserRoutes } from "@/modules/user/user.route";
@@ -32,6 +33,10 @@ const moduleRoutes = [
   {
     path: "/user",
     route: UserRoutes,
+  },
+  {
+    path: "/friendships",
+    route: FriendshipRoutes,
   },
 ];
 

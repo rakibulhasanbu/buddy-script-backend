@@ -9,6 +9,7 @@ export type UserResponse = {
   photoUrl: string | null;
   coverUrl: string | null;
   bio: string | null;
+  headline: string | null;
   role: EUserRole;
   isBlocked: boolean;
   createdAt: Date;
@@ -23,6 +24,7 @@ export type PublicUserResponse = {
   photoUrl: string | null;
   coverUrl: string | null;
   bio: string | null;
+  headline: string | null;
   role: EUserRole;
   createdAt: Date;
 };
@@ -31,6 +33,7 @@ export type UpdateProfileInput = {
   firstName?: string;
   lastName?: string;
   bio?: string;
+  headline?: string;
   photoUrl?: string;
   coverUrl?: string;
 };

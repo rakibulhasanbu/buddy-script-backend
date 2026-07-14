@@ -23,6 +23,7 @@ const buildUserResponse = (user: {
   photoUrl: string | null;
   coverUrl: string | null;
   bio: string | null;
+  headline: string | null;
   role: string;
   isBlocked: boolean;
   createdAt: Date;
@@ -76,6 +77,7 @@ const signup = async (payload: SignupInput): Promise<LoginResponse> => {
       photoUrl: true,
       coverUrl: true,
       bio: true,
+      headline: true,
       isBlocked: true,
       createdAt: true,
       updatedAt: true,
@@ -106,6 +108,7 @@ const login = async (payload: LoginInput): Promise<LoginResponse> => {
       photoUrl: true,
       coverUrl: true,
       bio: true,
+      headline: true,
       isBlocked: true,
       createdAt: true,
       updatedAt: true,
@@ -138,6 +141,7 @@ const login = async (payload: LoginInput): Promise<LoginResponse> => {
       photoUrl: user.photoUrl,
       coverUrl: user.coverUrl,
       bio: user.bio,
+      headline: user.headline,
       isBlocked: user.isBlocked,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -164,6 +168,7 @@ const refreshToken = async (token: string): Promise<RefreshTokenResponse> => {
       photoUrl: true,
       coverUrl: true,
       bio: true,
+      headline: true,
       isBlocked: true,
       createdAt: true,
       updatedAt: true,
@@ -198,6 +203,7 @@ const changePassword = async (payload: ChangePasswordInput): Promise<LoginRespon
       photoUrl: true,
       coverUrl: true,
       bio: true,
+      headline: true,
       isBlocked: true,
       createdAt: true,
       updatedAt: true,
@@ -226,6 +232,7 @@ const changePassword = async (payload: ChangePasswordInput): Promise<LoginRespon
       photoUrl: true,
       coverUrl: true,
       bio: true,
+      headline: true,
       isBlocked: true,
       createdAt: true,
       updatedAt: true,

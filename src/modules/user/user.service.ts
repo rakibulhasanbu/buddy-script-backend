@@ -13,6 +13,7 @@ const buildUserResponse = (user: {
   photoUrl: string | null;
   coverUrl: string | null;
   bio: string | null;
+  headline: string | null;
   role: string;
   isBlocked: boolean;
   createdAt: Date;
@@ -30,6 +31,7 @@ const buildPublicUserResponse = (user: {
   photoUrl: string | null;
   coverUrl: string | null;
   bio: string | null;
+  headline: string | null;
   role: string;
   createdAt: Date;
 }): PublicUserResponse => ({
@@ -46,6 +48,7 @@ const userSelect = {
   photoUrl: true,
   coverUrl: true,
   bio: true,
+  headline: true,
   role: true,
   isBlocked: true,
   createdAt: true,
@@ -59,6 +62,7 @@ const publicUserSelect = {
   photoUrl: true,
   coverUrl: true,
   bio: true,
+  headline: true,
   role: true,
   createdAt: true,
 };
@@ -96,6 +100,7 @@ const updateMe = async (userId: string, payload: UpdateProfileInput): Promise<Us
       ...(payload.firstName !== undefined && { firstName: payload.firstName }),
       ...(payload.lastName !== undefined && { lastName: payload.lastName }),
       ...(payload.bio !== undefined && { bio: payload.bio }),
+      ...(payload.headline !== undefined && { headline: payload.headline }),
       ...(payload.photoUrl !== undefined && { photoUrl: payload.photoUrl }),
       ...(payload.coverUrl !== undefined && { coverUrl: payload.coverUrl }),
     },

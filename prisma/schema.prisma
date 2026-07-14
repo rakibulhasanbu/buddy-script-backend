@@ -7,22 +7,39 @@ datasource db {
 }
 
 model User {
-  id            String          @id @unique @default(uuid())
-  firstName     String
-  lastName      String
-  email         String          @unique
-  password      String
-  photoUrl      String?         @default("https://i.ibb.co.com/mJrrGf8/Whats-App-Image-2025-01-17-at-11-15-33-AM.jpg")
-  coverUrl      String?
-  bio           String?         @db.Text
-  role          EUserRole       @default(USER)
-  isBlocked     Boolean         @default(false)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  posts         Post[]
-  comments      Comment[]
-  reactions     Reaction[]
-  uploadedImage UploadedImage[]
+  id                 String        @id @unique @default(uuid())
+  firstName          String
+  lastName           String
+  email              String        @unique
+  password           String
+  photoUrl           String?       @default("https://i.ibb.co.com/mJrrGf8/Whats-App-Image-2025-01-17-at-11-15-33-AM.jpg")
+  coverUrl           String?
+  bio                String?       @db.Text
+  role               EUserRole     @default(USER)
+  headline           String?       @db.VarChar(100)
+  isBlocked          Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  posts              Post[]
+  comments           Comment[]
+  reactions          Reaction[]
+  uploadedImage      UploadedImage[]
+  sentFriendships    Friendship[]  @relation("SentFriendships")
+  receivedFriendships Friendship[] @relation("ReceivedFriendships")
+}
+
+model Friendship {
+  id          String             @id @unique @default(uuid())
+  requesterId String
+  addresseeId String
+  status      EFriendshipStatus  @default(PENDING)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  requester   User               @relation("SentFriendships", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee   User               @relation("ReceivedFriendships", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId, addresseeId, status])
 }
 
 model UploadedImage {
@@ -90,6 +107,12 @@ enum EUserRole {
   USER
   SELLER
   EMPLOYEE
+}
+
+enum EFriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
 
 enum EUploadImageType {

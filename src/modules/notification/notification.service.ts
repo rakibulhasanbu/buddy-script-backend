@@ -7,7 +7,7 @@ import prisma from "@/lib/prisma";
 import {
   CreateNotificationInput,
   NotificationActor,
-  NotificationFilterOptions,
+  NotificationFilters,
   NotificationGroup,
   NotificationListResponse,
   UnreadCountResponse,
@@ -138,19 +138,39 @@ const createBulkNotifications = async (payloads: CreateNotificationInput[]): Pro
 
 const getGroupedNotifications = async (
   currentUserId: string,
-  options: NotificationFilterOptions,
+  filters: NotificationFilters,
+  options: { cursor?: string; limit?: number },
 ): Promise<NotificationListResponse> => {
   const limit = options.limit && options.limit > 0 && options.limit <= 50 ? options.limit : DEFAULT_PAGE_LIMIT;
   const cursor = options.cursor ? decodeCursor(options.cursor) : undefined;
-  const unreadOnly = options.unreadOnly === "true";
 
-  const where: Prisma.NotificationWhereInput = {
+  const baseWhere: Prisma.NotificationWhereInput = {
     userId: currentUserId,
-    ...(unreadOnly && { isRead: false }),
-    ...(cursor && {
-      OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
-    }),
   };
+
+  const extraConditions: Prisma.NotificationWhereInput[] = [];
+
+  if (filters.type) {
+    extraConditions.push({ type: filters.type as ENotificationType });
+  }
+  if (filters.entityType) {
+    extraConditions.push({ entityType: filters.entityType as ENotificationEntity });
+  }
+  if (filters.isRead === "true") {
+    extraConditions.push({ isRead: true });
+  } else if (filters.isRead === "false") {
+    extraConditions.push({ isRead: false });
+  }
+
+  if (cursor) {
+    extraConditions.push({
+      OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
+    });
+  }
+
+  const where: Prisma.NotificationWhereInput = extraConditions.length > 0
+    ? { AND: [baseWhere, ...extraConditions] }
+    : baseWhere;
 
   const notifications = await prisma.notification.findMany({
     where,

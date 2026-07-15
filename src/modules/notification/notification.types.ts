@@ -40,10 +40,11 @@ export type CreateNotificationInput = {
   referenceId?: string;
 };
 
-export type NotificationFilterOptions = {
-  cursor?: string;
-  limit?: number;
-  unreadOnly?: string;
+export type NotificationFilters = {
+  searchTerm?: string;
+  type?: string;
+  entityType?: string;
+  isRead?: string;
 };
 
 export type MarkGroupReadInput = {

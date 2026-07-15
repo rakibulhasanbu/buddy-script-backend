@@ -1,8 +1,11 @@
 import { Request, Response, RequestHandler } from "express";
 import httpStatus from "http-status";
 import { JwtPayload } from "jsonwebtoken";
+import { paginationFields } from "@/constants/pagination";
 import { catchAsync } from "@/middlewares/catch-async";
+import { pick } from "@/utils/pick";
 import { sendResponse } from "@/middlewares/send-response";
+import { postFilterAbleFields } from "./post.constant";
 import { PostService } from "./post.service";
 import { PostResponse } from "./post.types";
 
@@ -20,37 +23,33 @@ const createPost: RequestHandler = catchAsync(async (req: Request, res: Response
 
 const getFeed: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-  const { cursor, limit } = req.query;
+  const filters = pick(req.query, ["searchTerm", ...postFilterAbleFields]);
+  const paginationOptions = pick(req.query, paginationFields);
 
-  const { data, meta } = await PostService.getFeed(user.userId, {
-    cursor: cursor as string | undefined,
-    limit: limit ? Number(limit) : undefined,
-  });
+  const result = await PostService.getFeed(user.userId, filters, paginationOptions);
 
   sendResponse<PostResponse[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Feed fetched successfully",
-    data,
-    meta,
+    data: result.data,
+    meta: result.meta,
   });
 });
 
 const getPostsByUser: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-  const { cursor, limit } = req.query;
+  const filters = pick(req.query, ["searchTerm", ...postFilterAbleFields]);
+  const paginationOptions = pick(req.query, paginationFields);
 
-  const { data, meta } = await PostService.getPostsByUserId(req.params.id, user.userId, {
-    cursor: cursor as string | undefined,
-    limit: limit ? Number(limit) : undefined,
-  });
+  const result = await PostService.getPostsByUserId(req.params.id, user.userId, filters, paginationOptions);
 
   sendResponse<PostResponse[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "User posts fetched successfully",
-    data,
-    meta,
+    data: result.data,
+    meta: result.meta,
   });
 });
 

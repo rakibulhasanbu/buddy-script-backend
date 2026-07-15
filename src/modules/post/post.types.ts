@@ -12,6 +12,12 @@ export type UpdatePostInput = {
   visibility?: EVisibility;
 };
 
+export type PostFilters = {
+  searchTerm?: string;
+  visibility?: string;
+  authorId?: string;
+};
+
 export type PostFilterOptions = {
   cursor?: string;
   limit?: number;
@@ -40,9 +46,7 @@ export type PostResponse = {
 
 export type FeedResponse = {
   data: PostResponse[];
-  meta: {
-    nextCursor: string | null;
-  };
+  meta: { page: number; limit: number; total: number };
 };
 
 export type UserPostsResponse = FeedResponse;

@@ -19,14 +19,13 @@ const updatePostZodSchema = z.object({
 
 const postFilterZodSchema = z.object({
   query: z.object({
-    cursor: z.string().optional(),
-    limit: z
-      .string()
-      .optional()
-      .transform(val => (val ? Number(val) : undefined))
-      .refine(val => val === undefined || (val > 0 && val <= 50), {
-        message: "Limit must be between 1 and 50",
-      }),
+    searchTerm: z.string().optional(),
+    visibility: z.enum([EVisibility.PUBLIC, EVisibility.PRIVATE]).optional(),
+    authorId: z.string().optional(),
+    page: z.string().optional(),
+    limit: z.string().optional(),
+    sortBy: z.string().optional(),
+    sortOrder: z.enum(["asc", "desc"]).optional(),
   }),
 });
 

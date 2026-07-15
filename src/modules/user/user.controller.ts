@@ -1,8 +1,8 @@
-import { Request, Response, RequestHandler } from "express";
-import httpStatus from "http-status";
-import { JwtPayload } from "jsonwebtoken";
 import { catchAsync } from "@/middlewares/catch-async";
 import { sendResponse } from "@/middlewares/send-response";
+import { Request, RequestHandler, Response } from "express";
+import httpStatus from "http-status";
+import { JwtPayload } from "jsonwebtoken";
 
 import { UserService } from "./user.service";
 import { PublicUserResponse, UpdateProfileInput, UserResponse } from "./user.types";

@@ -8,6 +8,11 @@ export type UpdateCommentInput = {
   content: string;
 };
 
+export type CommentFilters = {
+  searchTerm?: string;
+  authorId?: string;
+};
+
 export type CommentFilterOptions = {
   cursor?: string;
   limit?: number;
@@ -36,7 +41,5 @@ export type CommentResponse = {
 
 export type CommentListResponse = {
   data: CommentResponse[];
-  meta: {
-    nextCursor: string | null;
-  };
+  meta: { page: number; limit: number; total: number };
 };

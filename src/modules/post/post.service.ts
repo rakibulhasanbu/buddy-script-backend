@@ -5,9 +5,10 @@ import prisma from "@/lib/prisma";
 import { NotificationService } from "@/modules/notification/notification.service";
 import { ReactionService } from "@/modules/reaction/reaction.service";
 import { ReactionCounts } from "@/modules/reaction/reaction.types";
-import { CreatePostInput, FeedResponse, PostFilterOptions, PostResponse, UpdatePostInput } from "./post.types";
-
-const DEFAULT_PAGE_LIMIT = 10;
+import { paginationHelpers } from "@/utils/pagination";
+import { queryBuilder } from "@/utils/query-builder";
+import { PaginationOptions } from "@/types/pagination";
+import { CreatePostInput, FeedResponse, PostFilters, PostResponse, UpdatePostInput } from "./post.types";
 
 type PostWithAuthor = Post & {
   author: {
@@ -37,20 +38,6 @@ const buildPostResponse = (post: PostWithAuthor, myReaction: string | null = nul
     },
     myReaction,
   };
-};
-
-const encodeCursor = (createdAt: Date, id: string): string => {
-  return Buffer.from(`${createdAt.toISOString()}|${id}`).toString("base64");
-};
-
-const decodeCursor = (cursor: string): { createdAt: Date; id: string } => {
-  try {
-    const decoded = Buffer.from(cursor, "base64").toString("ascii");
-    const [createdAt, id] = decoded.split("|");
-    return { createdAt: new Date(createdAt), id };
-  } catch {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Invalid cursor");
-  }
 };
 
 const createPost = async (payload: CreatePostInput, authorId: string): Promise<PostResponse> => {
@@ -107,95 +94,110 @@ const createPost = async (payload: CreatePostInput, authorId: string): Promise<P
   return buildPostResponse(post);
 };
 
-const getFeed = async (currentUserId: string, options: PostFilterOptions): Promise<FeedResponse> => {
-  const limit = options.limit && options.limit > 0 && options.limit <= 50 ? options.limit : DEFAULT_PAGE_LIMIT;
-  const cursor = options.cursor ? decodeCursor(options.cursor) : undefined;
+const getFeed = async (
+  currentUserId: string,
+  filters: PostFilters,
+  paginationOptions: PaginationOptions,
+): Promise<FeedResponse> => {
+  const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(paginationOptions);
 
-  const where: Prisma.PostWhereInput = {
-    OR: [{ visibility: EVisibility.PUBLIC }, { authorId: currentUserId }],
-    ...(cursor && {
-      OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
-    }),
-  };
-
-  const posts = await prisma.post.findMany({
-    where,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: limit + 1,
-    include: {
-      author: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          photoUrl: true,
-        },
-      },
-    },
+  const searchWhere = queryBuilder.buildWhereClause<Prisma.PostWhereInput>({
+    searchableFields: ["content"],
+    filterableFields: ["visibility", "authorId"],
+    filters: filters as Record<string, unknown>,
   });
 
-  const hasMore = posts.length > limit;
-  const items = hasMore ? posts.slice(0, -1) : posts;
+  const baseWhere: Prisma.PostWhereInput = {
+    OR: [{ visibility: EVisibility.PUBLIC }, { authorId: currentUserId }],
+  };
+
+  const where: Prisma.PostWhereInput = Object.keys(searchWhere).length > 0
+    ? { AND: [baseWhere, searchWhere] }
+    : baseWhere;
+
+  const [posts, total] = await Promise.all([
+    prisma.post.findMany({
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      skip,
+      take: limit,
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            photoUrl: true,
+          },
+        },
+      },
+    }),
+    prisma.post.count({ where }),
+  ]);
 
   const myReactions = await ReactionService.getUserReactionsForEntities(
     "POST",
-    items.map(p => p.id),
+    posts.map(p => p.id),
     currentUserId,
   );
 
-  const data = items.map(post => buildPostResponse(post, myReactions.get(post.id) || null));
-  const nextCursor =
-    hasMore && items.length > 0 ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id) : null;
+  const data = posts.map(post => buildPostResponse(post, myReactions.get(post.id) || null));
 
-  return { data, meta: { nextCursor } };
+  return { data, meta: { page, limit, total } };
 };
 
 const getPostsByUserId = async (
   targetUserId: string,
   currentUserId: string,
-  options: PostFilterOptions,
+  filters: PostFilters,
+  paginationOptions: PaginationOptions,
 ): Promise<FeedResponse> => {
-  const limit = options.limit && options.limit > 0 && options.limit <= 50 ? options.limit : DEFAULT_PAGE_LIMIT;
-  const cursor = options.cursor ? decodeCursor(options.cursor) : undefined;
+  const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(paginationOptions);
 
-  const where: Prisma.PostWhereInput = {
-    authorId: targetUserId,
-    OR: [{ visibility: EVisibility.PUBLIC }, { authorId: currentUserId }],
-    ...(cursor && {
-      OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
-    }),
-  };
-
-  const posts = await prisma.post.findMany({
-    where,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: limit + 1,
-    include: {
-      author: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          photoUrl: true,
-        },
-      },
-    },
+  const searchWhere = queryBuilder.buildWhereClause<Prisma.PostWhereInput>({
+    searchableFields: ["content"],
+    filterableFields: ["visibility", "authorId"],
+    filters: filters as Record<string, unknown>,
   });
 
-  const hasMore = posts.length > limit;
-  const items = hasMore ? posts.slice(0, -1) : posts;
+  const baseWhere: Prisma.PostWhereInput = {
+    authorId: targetUserId,
+    OR: [{ visibility: EVisibility.PUBLIC }, { authorId: currentUserId }],
+  };
+
+  const where: Prisma.PostWhereInput = Object.keys(searchWhere).length > 0
+    ? { AND: [baseWhere, searchWhere] }
+    : baseWhere;
+
+  const [posts, total] = await Promise.all([
+    prisma.post.findMany({
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      skip,
+      take: limit,
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            photoUrl: true,
+          },
+        },
+      },
+    }),
+    prisma.post.count({ where }),
+  ]);
 
   const myReactions = await ReactionService.getUserReactionsForEntities(
     "POST",
-    items.map(p => p.id),
+    posts.map(p => p.id),
     currentUserId,
   );
 
-  const data = items.map(post => buildPostResponse(post, myReactions.get(post.id) || null));
-  const nextCursor =
-    hasMore && items.length > 0 ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id) : null;
+  const data = posts.map(post => buildPostResponse(post, myReactions.get(post.id) || null));
 
-  return { data, meta: { nextCursor } };
+  return { data, meta: { page, limit, total } };
 };
 
 const getPostById = async (postId: string, currentUserId: string): Promise<PostResponse> => {

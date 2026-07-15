@@ -35,10 +35,25 @@ router.delete(
   FriendshipController.cancelRequest,
 );
 
-router.get("/pending", auth("USER", "ADMIN", "SUPER_ADMIN"), FriendshipController.getPendingRequests);
+router.get(
+  "/pending",
+  auth("USER", "ADMIN", "SUPER_ADMIN"),
+  validateRequest(FriendshipValidation.listFilterZodSchema),
+  FriendshipController.getPendingRequests,
+);
 
-router.get("/friends", auth("USER", "ADMIN", "SUPER_ADMIN"), FriendshipController.getFriends);
+router.get(
+  "/friends",
+  auth("USER", "ADMIN", "SUPER_ADMIN"),
+  validateRequest(FriendshipValidation.listFilterZodSchema),
+  FriendshipController.getFriends,
+);
 
-router.get("/suggestions", auth("USER", "ADMIN", "SUPER_ADMIN"), FriendshipController.getSuggestions);
+router.get(
+  "/suggestions",
+  auth("USER", "ADMIN", "SUPER_ADMIN"),
+  validateRequest(FriendshipValidation.listFilterZodSchema),
+  FriendshipController.getSuggestions,
+);
 
 export const FriendshipRoutes = router;

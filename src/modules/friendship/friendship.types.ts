@@ -24,8 +24,18 @@ export type SendRequestInput = {
   addresseeId: string;
 };
 
+export type FriendshipFilters = {
+  searchTerm?: string;
+  status?: string;
+};
+
+export type SuggestionFilters = {
+  searchTerm?: string;
+};
+
 export type FriendListResponse = {
   data: FriendshipResponse[];
+  meta: { page: number; limit: number; total: number };
 };
 
 export type SuggestionListResponse = {

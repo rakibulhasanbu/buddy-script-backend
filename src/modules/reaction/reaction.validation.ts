@@ -15,14 +15,11 @@ const whoReactedZodSchema = z.object({
     entityId: z.string(),
   }),
   query: z.object({
-    cursor: z.string().optional(),
-    limit: z
-      .string()
-      .optional()
-      .transform(val => (val ? Number(val) : undefined))
-      .refine(val => val === undefined || (val > 0 && val <= 50), {
-        message: "Limit must be between 1 and 50",
-      }),
+    type: z.nativeEnum(EReactionType).optional(),
+    page: z.string().optional(),
+    limit: z.string().optional(),
+    sortBy: z.string().optional(),
+    sortOrder: z.enum(["asc", "desc"]).optional(),
   }),
 });
 

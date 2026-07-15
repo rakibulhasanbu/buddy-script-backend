@@ -1,7 +1,7 @@
-import { EUserRole } from "@prisma/client";
-import httpStatus from "http-status";
 import { ApiError } from "@/errors/api-error";
 import prisma from "@/lib/prisma";
+import { EUserRole } from "@prisma/client";
+import httpStatus from "http-status";
 
 import { PublicUserResponse, UpdateProfileInput, UserResponse } from "./user.types";
 

@@ -1,13 +1,21 @@
-import { EFriendshipStatus, ENotificationEntity, ENotificationType } from "@prisma/client";
+import { EFriendshipStatus, ENotificationEntity, ENotificationType, Prisma } from "@prisma/client";
 import httpStatus from "http-status";
 import { ApiError } from "@/errors/api-error";
 import prisma from "@/lib/prisma";
 import { NotificationService } from "@/modules/notification/notification.service";
 
 import { paginationHelpers } from "@/utils/pagination";
+import { queryBuilder } from "@/utils/query-builder";
 import { PaginationOptions } from "@/types/pagination";
 
-import { FriendListResponse, FriendshipResponse, SendRequestInput, SuggestionListResponse } from "./friendship.types";
+import {
+  FriendListResponse,
+  FriendshipFilters,
+  FriendshipResponse,
+  SendRequestInput,
+  SuggestionFilters,
+  SuggestionListResponse,
+} from "./friendship.types";
 
 const userSelect = {
   id: true,
@@ -183,43 +191,114 @@ const cancelRequest = async (currentUserId: string, friendshipId: string): Promi
   await prisma.friendship.delete({ where: { id: friendshipId } });
 };
 
-const getPendingRequests = async (currentUserId: string): Promise<FriendListResponse> => {
-  const friendships = await prisma.friendship.findMany({
-    where: {
-      addresseeId: currentUserId,
-      status: EFriendshipStatus.PENDING,
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      requester: { select: userSelect },
-      addressee: { select: userSelect },
-    },
-  });
+const getPendingRequests = async (
+  currentUserId: string,
+  filters: FriendshipFilters,
+  paginationOptions: PaginationOptions = {},
+): Promise<FriendListResponse> => {
+  const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(paginationOptions);
 
-  return { data: friendships.map(buildFriendshipResponse) };
+  const { searchTerm, ...filterData } = filters;
+
+  const baseWhere: Prisma.FriendshipWhereInput = {
+    addresseeId: currentUserId,
+    status: EFriendshipStatus.PENDING,
+  };
+
+  const extraConditions: Prisma.FriendshipWhereInput[] = [];
+
+  if (searchTerm) {
+    extraConditions.push({
+      OR: [
+        { requester: { firstName: { contains: searchTerm, mode: "insensitive" } } },
+        { requester: { lastName: { contains: searchTerm, mode: "insensitive" } } },
+      ],
+    });
+  }
+
+  if (filterData.status) {
+    extraConditions.push({ status: filterData.status as EFriendshipStatus });
+  }
+
+  const where: Prisma.FriendshipWhereInput = extraConditions.length > 0
+    ? { AND: [baseWhere, ...extraConditions] }
+    : baseWhere;
+
+  const [friendships, total] = await Promise.all([
+    prisma.friendship.findMany({
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      skip,
+      take: limit,
+      include: {
+        requester: { select: userSelect },
+        addressee: { select: userSelect },
+      },
+    }),
+    prisma.friendship.count({ where }),
+  ]);
+
+  return { data: friendships.map(buildFriendshipResponse), meta: { page, limit, total } };
 };
 
-const getFriends = async (currentUserId: string): Promise<FriendListResponse> => {
-  const friendships = await prisma.friendship.findMany({
-    where: {
-      status: EFriendshipStatus.ACCEPTED,
-      OR: [{ requesterId: currentUserId }, { addresseeId: currentUserId }],
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      requester: { select: userSelect },
-      addressee: { select: userSelect },
-    },
-  });
+const getFriends = async (
+  currentUserId: string,
+  filters: FriendshipFilters,
+  paginationOptions: PaginationOptions = {},
+): Promise<FriendListResponse> => {
+  const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(paginationOptions);
 
-  return { data: friendships.map(buildFriendshipResponse) };
+  const { searchTerm, ...filterData } = filters;
+
+  const baseWhere: Prisma.FriendshipWhereInput = {
+    status: EFriendshipStatus.ACCEPTED,
+    OR: [{ requesterId: currentUserId }, { addresseeId: currentUserId }],
+  };
+
+  const extraConditions: Prisma.FriendshipWhereInput[] = [];
+
+  if (searchTerm) {
+    extraConditions.push({
+      OR: [
+        { requester: { firstName: { contains: searchTerm, mode: "insensitive" } } },
+        { requester: { lastName: { contains: searchTerm, mode: "insensitive" } } },
+        { addressee: { firstName: { contains: searchTerm, mode: "insensitive" } } },
+        { addressee: { lastName: { contains: searchTerm, mode: "insensitive" } } },
+      ],
+    });
+  }
+
+  if (filterData.status) {
+    extraConditions.push({ status: filterData.status as EFriendshipStatus });
+  }
+
+  const where: Prisma.FriendshipWhereInput = extraConditions.length > 0
+    ? { AND: [baseWhere, ...extraConditions] }
+    : baseWhere;
+
+  const [friendships, total] = await Promise.all([
+    prisma.friendship.findMany({
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      skip,
+      take: limit,
+      include: {
+        requester: { select: userSelect },
+        addressee: { select: userSelect },
+      },
+    }),
+    prisma.friendship.count({ where }),
+  ]);
+
+  return { data: friendships.map(buildFriendshipResponse), meta: { page, limit, total } };
 };
 
 const getSuggestions = async (
   currentUserId: string,
-  options: PaginationOptions = {},
+  filters: SuggestionFilters,
+  paginationOptions: PaginationOptions = {},
 ): Promise<SuggestionListResponse> => {
-  const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(options);
+  const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(paginationOptions);
 
   const connectedUserIds = await prisma.friendship.findMany({
     where: {
@@ -237,8 +316,15 @@ const getSuggestions = async (
     excludedIds.add(friendship.addresseeId);
   });
 
-  const whereCondition = {
+  const searchWhere = queryBuilder.buildWhereClause<Prisma.UserWhereInput>({
+    searchableFields: ["firstName", "lastName", "headline"],
+    filterableFields: [],
+    filters: filters as Record<string, unknown>,
+  });
+
+  const whereCondition: Prisma.UserWhereInput = {
     id: { notIn: Array.from(excludedIds) },
+    ...(Object.keys(searchWhere).length > 0 ? searchWhere : {}),
   };
 
   const [users, total] = await Promise.all([

@@ -29,6 +29,12 @@ export type PublicUserResponse = {
   createdAt: Date;
 };
 
+export type UserFilters = {
+  searchTerm?: string;
+  role?: string;
+  isBlocked?: string;
+};
+
 export type UpdateProfileInput = {
   firstName?: string;
   lastName?: string;

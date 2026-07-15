@@ -1,8 +1,11 @@
 import { Request, Response, RequestHandler } from "express";
 import httpStatus from "http-status";
 import { JwtPayload } from "jsonwebtoken";
+import { paginationFields } from "@/constants/pagination";
 import { catchAsync } from "@/middlewares/catch-async";
+import { pick } from "@/utils/pick";
 import { sendResponse } from "@/middlewares/send-response";
+import { reactionFilterAbleFields } from "./reaction.constant";
 import { ReactionService } from "./reaction.service";
 import { ReactedUser } from "./reaction.types";
 
@@ -20,21 +23,22 @@ const toggleReaction: RequestHandler = catchAsync(async (req: Request, res: Resp
 
 const getWhoReacted: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const { entityType, entityId } = req.params;
-  const { cursor, limit } = req.query;
+  const filters = pick(req.query, ["searchTerm", ...reactionFilterAbleFields]);
+  const paginationOptions = pick(req.query, paginationFields);
 
-  const { data, meta } = await ReactionService.getWhoReacted(
+  const result = await ReactionService.getWhoReacted(
     entityType as "POST" | "COMMENT",
     entityId,
-    cursor as string | undefined,
-    limit ? Number(limit) : undefined,
+    filters,
+    paginationOptions,
   );
 
   sendResponse<ReactedUser[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Reactions fetched successfully",
-    data,
-    meta,
+    data: result.data,
+    meta: result.meta,
   });
 });
 

@@ -5,15 +5,16 @@ import prisma from "@/lib/prisma";
 import { NotificationService } from "@/modules/notification/notification.service";
 import { ReactionService } from "@/modules/reaction/reaction.service";
 import { ReactionCounts } from "@/modules/reaction/reaction.types";
+import { paginationHelpers } from "@/utils/pagination";
+import { queryBuilder } from "@/utils/query-builder";
+import { PaginationOptions } from "@/types/pagination";
 import {
-  CommentFilterOptions,
+  CommentFilters,
   CommentListResponse,
   CommentResponse,
   CreateCommentInput,
   UpdateCommentInput,
 } from "./comment.types";
-
-const DEFAULT_PAGE_LIMIT = 10;
 
 type CommentWithAuthor = Comment & {
   author: {
@@ -43,20 +44,6 @@ const buildCommentResponse = (comment: CommentWithAuthor, myReaction: string | n
     },
     myReaction,
   };
-};
-
-const encodeCursor = (createdAt: Date, id: string): string => {
-  return Buffer.from(`${createdAt.toISOString()}|${id}`).toString("base64");
-};
-
-const decodeCursor = (cursor: string): { createdAt: Date; id: string } => {
-  try {
-    const decoded = Buffer.from(cursor, "base64").toString("ascii");
-    const [createdAt, id] = decoded.split("|");
-    return { createdAt: new Date(createdAt), id };
-  } catch {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Invalid cursor");
-  }
 };
 
 const assertPostAccessible = async (postId: string, userId: string) => {
@@ -163,57 +150,64 @@ const createComment = async (payload: CreateCommentInput, authorId: string): Pro
 const getCommentsByPost = async (
   postId: string,
   userId: string,
-  options: CommentFilterOptions,
+  filters: CommentFilters,
+  paginationOptions: PaginationOptions,
 ): Promise<CommentListResponse> => {
   await assertPostAccessible(postId, userId);
 
-  const limit = options.limit && options.limit > 0 && options.limit <= 50 ? options.limit : DEFAULT_PAGE_LIMIT;
-  const cursor = options.cursor ? decodeCursor(options.cursor) : undefined;
+  const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(paginationOptions);
 
-  const where: Prisma.CommentWhereInput = {
-    postId,
-    parentId: null,
-    ...(cursor && {
-      OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
-    }),
-  };
-
-  const comments = await prisma.comment.findMany({
-    where,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: limit + 1,
-    include: {
-      author: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          photoUrl: true,
-        },
-      },
-    },
+  const searchWhere = queryBuilder.buildWhereClause<Prisma.CommentWhereInput>({
+    searchableFields: ["content"],
+    filterableFields: ["authorId"],
+    filters: filters as Record<string, unknown>,
   });
 
-  const hasMore = comments.length > limit;
-  const items = hasMore ? comments.slice(0, -1) : comments;
+  const baseWhere: Prisma.CommentWhereInput = {
+    postId,
+    parentId: null,
+  };
+
+  const where: Prisma.CommentWhereInput = Object.keys(searchWhere).length > 0
+    ? { AND: [baseWhere, searchWhere] }
+    : baseWhere;
+
+  const [comments, total] = await Promise.all([
+    prisma.comment.findMany({
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      skip,
+      take: limit,
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            photoUrl: true,
+          },
+        },
+      },
+    }),
+    prisma.comment.count({ where }),
+  ]);
 
   const myReactions = await ReactionService.getUserReactionsForEntities(
     "COMMENT",
-    items.map(c => c.id),
+    comments.map(c => c.id),
     userId,
   );
 
-  const data = items.map(comment => buildCommentResponse(comment, myReactions.get(comment.id) || null));
-  const nextCursor =
-    hasMore && items.length > 0 ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id) : null;
+  const data = comments.map(comment => buildCommentResponse(comment, myReactions.get(comment.id) || null));
 
-  return { data, meta: { nextCursor } };
+  return { data, meta: { page, limit, total } };
 };
 
 const getRepliesByComment = async (
   commentId: string,
   userId: string,
-  options: CommentFilterOptions,
+  filters: CommentFilters,
+  paginationOptions: PaginationOptions,
 ): Promise<CommentListResponse> => {
   const comment = await prisma.comment.findUnique({
     where: { id: commentId },
@@ -226,46 +220,51 @@ const getRepliesByComment = async (
 
   await assertPostAccessible(comment.postId, userId);
 
-  const limit = options.limit && options.limit > 0 && options.limit <= 50 ? options.limit : DEFAULT_PAGE_LIMIT;
-  const cursor = options.cursor ? decodeCursor(options.cursor) : undefined;
+  const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(paginationOptions);
 
-  const where: Prisma.CommentWhereInput = {
-    parentId: commentId,
-    ...(cursor && {
-      OR: [{ createdAt: { gt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { gt: cursor.id } }],
-    }),
-  };
-
-  const replies = await prisma.comment.findMany({
-    where,
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    take: limit + 1,
-    include: {
-      author: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          photoUrl: true,
-        },
-      },
-    },
+  const searchWhere = queryBuilder.buildWhereClause<Prisma.CommentWhereInput>({
+    searchableFields: ["content"],
+    filterableFields: ["authorId"],
+    filters: filters as Record<string, unknown>,
   });
 
-  const hasMore = replies.length > limit;
-  const items = hasMore ? replies.slice(0, -1) : replies;
+  const baseWhere: Prisma.CommentWhereInput = {
+    parentId: commentId,
+  };
+
+  const where: Prisma.CommentWhereInput = Object.keys(searchWhere).length > 0
+    ? { AND: [baseWhere, searchWhere] }
+    : baseWhere;
+
+  const [replies, total] = await Promise.all([
+    prisma.comment.findMany({
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      skip,
+      take: limit,
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            photoUrl: true,
+          },
+        },
+      },
+    }),
+    prisma.comment.count({ where }),
+  ]);
 
   const myReactions = await ReactionService.getUserReactionsForEntities(
     "COMMENT",
-    items.map(c => c.id),
+    replies.map(c => c.id),
     userId,
   );
 
-  const data = items.map(reply => buildCommentResponse(reply, myReactions.get(reply.id) || null));
-  const nextCursor =
-    hasMore && items.length > 0 ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id) : null;
+  const data = replies.map(reply => buildCommentResponse(reply, myReactions.get(reply.id) || null));
 
-  return { data, meta: { nextCursor } };
+  return { data, meta: { page, limit, total } };
 };
 
 const updateComment = async (

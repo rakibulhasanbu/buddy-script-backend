@@ -3,9 +3,10 @@ import httpStatus from "http-status";
 import { ApiError } from "@/errors/api-error";
 import prisma from "@/lib/prisma";
 import { NotificationService } from "@/modules/notification/notification.service";
-import { ReactionCounts, ReactedUser, ToggleReactionInput, WhoReactedResponse } from "./reaction.types";
-
-const DEFAULT_PAGE_LIMIT = 20;
+import { paginationHelpers } from "@/utils/pagination";
+import { queryBuilder } from "@/utils/query-builder";
+import { PaginationOptions } from "@/types/pagination";
+import { ReactionCounts, ReactionFilters, ReactedUser, ToggleReactionInput, WhoReactedResponse } from "./reaction.types";
 
 const assertEntityExists = async (entityType: EReactionEntity, entityId: string) => {
   if (entityType === EReactionEntity.POST) {
@@ -137,34 +138,47 @@ const toggleReaction = async (payload: ToggleReactionInput, userId: string) => {
 const getWhoReacted = async (
   entityType: EReactionEntity,
   entityId: string,
-  cursor?: string,
-  limit = DEFAULT_PAGE_LIMIT,
+  filters: ReactionFilters,
+  paginationOptions: PaginationOptions = {},
 ): Promise<WhoReactedResponse> => {
-  const parsedCursor = cursor ? decodeCursor(cursor) : undefined;
+  const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(paginationOptions);
 
-  const reactions = await prisma.reaction.findMany({
-    where: { entityType, entityId },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: limit + 1,
-    skip: parsedCursor ? 1 : 0,
-    cursor: parsedCursor ? { id: parsedCursor.id } : undefined,
-    include: {
-      user: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          photoUrl: true,
-        },
-      },
-    },
+  const searchWhere = queryBuilder.buildWhereClause<Prisma.ReactionWhereInput>({
+    searchableFields: [],
+    filterableFields: ["type"],
+    filters: filters as Record<string, unknown>,
   });
 
-  const hasMore = reactions.length > limit;
-  const items = hasMore ? reactions.slice(0, -1) : reactions;
-  const nextCursor = hasMore && items.length > 0 ? encodeCursor(items[items.length - 1].id) : null;
+  const baseWhere: Prisma.ReactionWhereInput = {
+    entityType,
+    entityId,
+  };
 
-  const data: ReactedUser[] = items.map(r => ({
+  const where: Prisma.ReactionWhereInput = Object.keys(searchWhere).length > 0
+    ? { AND: [baseWhere, searchWhere] }
+    : baseWhere;
+
+  const [reactions, total] = await Promise.all([
+    prisma.reaction.findMany({
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      skip,
+      take: limit,
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            photoUrl: true,
+          },
+        },
+      },
+    }),
+    prisma.reaction.count({ where }),
+  ]);
+
+  const data: ReactedUser[] = reactions.map(r => ({
     id: r.user.id,
     firstName: r.user.firstName,
     lastName: r.user.lastName,
@@ -174,7 +188,7 @@ const getWhoReacted = async (
     createdAt: r.createdAt,
   }));
 
-  return { data, meta: { nextCursor } };
+  return { data, meta: { page, limit, total } };
 };
 
 const getUserReactionsForEntities = async (
@@ -197,19 +211,6 @@ const getUserReactionsForEntities = async (
   });
 
   return new Map(reactions.map(r => [r.entityId, r.type]));
-};
-
-const encodeCursor = (id: string): string => {
-  return Buffer.from(id).toString("base64");
-};
-
-const decodeCursor = (cursor: string): { id: string } => {
-  try {
-    const id = Buffer.from(cursor, "base64").toString("ascii");
-    return { id };
-  } catch {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Invalid cursor");
-  }
 };
 
 export const ReactionService = {

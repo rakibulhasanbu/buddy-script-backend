@@ -3,7 +3,10 @@ import { sendResponse } from "@/middlewares/send-response";
 import { Request, RequestHandler, Response } from "express";
 import httpStatus from "http-status";
 import { JwtPayload } from "jsonwebtoken";
+import { paginationFields } from "@/constants/pagination";
+import { pick } from "@/utils/pick";
 
+import { friendFilterAbleFields, friendshipFilterAbleFields, suggestionFilterAbleFields } from "./friendship.constant";
 import { FriendshipService } from "./friendship.service";
 import { FriendshipResponse, FriendUser, SendRequestInput } from "./friendship.types";
 
@@ -57,44 +60,46 @@ const cancelRequest: RequestHandler = catchAsync(async (req: Request, res: Respo
 
 const getPendingRequests: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-  const { data } = await FriendshipService.getPendingRequests(user.userId);
+  const filters = pick(req.query, ["searchTerm", ...friendshipFilterAbleFields]);
+  const paginationOptions = pick(req.query, paginationFields);
+  const result = await FriendshipService.getPendingRequests(user.userId, filters, paginationOptions);
 
   sendResponse<FriendshipResponse[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Pending requests fetched successfully",
-    data,
+    meta: result.meta,
+    data: result.data,
   });
 });
 
 const getFriends: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-  const { data } = await FriendshipService.getFriends(user.userId);
+  const filters = pick(req.query, ["searchTerm", ...friendFilterAbleFields]);
+  const paginationOptions = pick(req.query, paginationFields);
+  const result = await FriendshipService.getFriends(user.userId, filters, paginationOptions);
 
   sendResponse<FriendshipResponse[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Friends fetched successfully",
-    data,
+    meta: result.meta,
+    data: result.data,
   });
 });
 
 const getSuggestions: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-  const { page, limit, sortBy, sortOrder } = req.query;
-  const { data, meta } = await FriendshipService.getSuggestions(user.userId, {
-    page: page ? Number(page) : undefined,
-    limit: limit ? Number(limit) : undefined,
-    sortBy: sortBy as string | undefined,
-    sortOrder: sortOrder as "asc" | "desc" | undefined,
-  });
+  const filters = pick(req.query, ["searchTerm", ...suggestionFilterAbleFields]);
+  const paginationOptions = pick(req.query, paginationFields);
+  const result = await FriendshipService.getSuggestions(user.userId, filters, paginationOptions);
 
   sendResponse<FriendUser[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Suggestions fetched successfully",
-    data,
-    meta,
+    data: result.data,
+    meta: result.meta,
   });
 });
 

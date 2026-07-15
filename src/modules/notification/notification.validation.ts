@@ -2,9 +2,11 @@ import { z } from "zod";
 
 const listNotificationsZodSchema = z.object({
   query: z.object({
+    type: z.string().optional(),
+    entityType: z.string().optional(),
+    isRead: z.enum(["true", "false"]).optional(),
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(50).optional(),
-    unreadOnly: z.enum(["true", "false"]).optional(),
   }),
 });
 

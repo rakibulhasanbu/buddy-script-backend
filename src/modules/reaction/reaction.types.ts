@@ -8,6 +8,11 @@ export type ToggleReactionInput = {
 
 export type ReactionCounts = Record<string, number>;
 
+export type ReactionFilters = {
+  searchTerm?: string;
+  type?: string;
+};
+
 export type ReactedUser = {
   id: string;
   firstName: string;
@@ -20,7 +25,5 @@ export type ReactedUser = {
 
 export type WhoReactedResponse = {
   data: ReactedUser[];
-  meta: {
-    nextCursor: string | null;
-  };
+  meta: { page: number; limit: number; total: number };
 };

@@ -215,7 +215,10 @@ const getFriends = async (currentUserId: string): Promise<FriendListResponse> =>
   return { data: friendships.map(buildFriendshipResponse) };
 };
 
-const getSuggestions = async (currentUserId: string, options: PaginationOptions = {}): Promise<SuggestionListResponse> => {
+const getSuggestions = async (
+  currentUserId: string,
+  options: PaginationOptions = {},
+): Promise<SuggestionListResponse> => {
   const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(options);
 
   const connectedUserIds = await prisma.friendship.findMany({

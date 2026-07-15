@@ -1,11 +1,11 @@
-import { Request, Response, RequestHandler } from "express";
-import httpStatus from "http-status";
-import { JwtPayload } from "jsonwebtoken";
 import { catchAsync } from "@/middlewares/catch-async";
 import { sendResponse } from "@/middlewares/send-response";
+import { Request, RequestHandler, Response } from "express";
+import httpStatus from "http-status";
+import { JwtPayload } from "jsonwebtoken";
 
 import { FriendshipService } from "./friendship.service";
-import { FriendListResponse, FriendshipResponse, FriendUser, SendRequestInput } from "./friendship.types";
+import { FriendshipResponse, FriendUser, SendRequestInput } from "./friendship.types";
 
 const sendRequest: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
@@ -57,25 +57,25 @@ const cancelRequest: RequestHandler = catchAsync(async (req: Request, res: Respo
 
 const getPendingRequests: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-  const result = await FriendshipService.getPendingRequests(user.userId);
+  const { data } = await FriendshipService.getPendingRequests(user.userId);
 
-  sendResponse<FriendListResponse>(res, {
+  sendResponse<FriendshipResponse[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Pending requests fetched successfully",
-    data: result,
+    data,
   });
 });
 
 const getFriends: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-  const result = await FriendshipService.getFriends(user.userId);
+  const { data } = await FriendshipService.getFriends(user.userId);
 
-  sendResponse<FriendListResponse>(res, {
+  sendResponse<FriendshipResponse[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Friends fetched successfully",
-    data: result,
+    data,
   });
 });
 

@@ -30,4 +30,5 @@ export type FriendListResponse = {
 
 export type SuggestionListResponse = {
   data: FriendUser[];
+  meta: { page: number; limit: number; total: number };
 };

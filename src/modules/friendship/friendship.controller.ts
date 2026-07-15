@@ -5,7 +5,7 @@ import { catchAsync } from "@/middlewares/catch-async";
 import { sendResponse } from "@/middlewares/send-response";
 
 import { FriendshipService } from "./friendship.service";
-import { FriendListResponse, FriendshipResponse, SendRequestInput, SuggestionListResponse } from "./friendship.types";
+import { FriendListResponse, FriendshipResponse, FriendUser, SendRequestInput } from "./friendship.types";
 
 const sendRequest: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
@@ -81,13 +81,20 @@ const getFriends: RequestHandler = catchAsync(async (req: Request, res: Response
 
 const getSuggestions: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-  const result = await FriendshipService.getSuggestions(user.userId);
+  const { page, limit, sortBy, sortOrder } = req.query;
+  const { data, meta } = await FriendshipService.getSuggestions(user.userId, {
+    page: page ? Number(page) : undefined,
+    limit: limit ? Number(limit) : undefined,
+    sortBy: sortBy as string | undefined,
+    sortOrder: sortOrder as "asc" | "desc" | undefined,
+  });
 
-  sendResponse<SuggestionListResponse>(res, {
+  sendResponse<FriendUser[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Suggestions fetched successfully",
-    data: result,
+    data,
+    meta,
   });
 });
 

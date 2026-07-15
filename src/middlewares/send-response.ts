@@ -1,14 +1,11 @@
 import { Response } from "express";
+import { IMeta } from "@/types/common";
 
 type ApiResponse<T> = {
   statusCode: number;
   success: boolean;
   message?: string | null;
-  meta?: {
-    page: number;
-    limit: number;
-    total: number;
-  };
+  meta?: IMeta;
   data?: T | null;
   token?: string | null;
 };

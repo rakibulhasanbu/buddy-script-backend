@@ -5,17 +5,18 @@ import { catchAsync } from "@/middlewares/catch-async";
 import { sendResponse } from "@/middlewares/send-response";
 
 import { NotificationService } from "./notification.service";
-import { NotificationFilterOptions, NotificationListResponse, UnreadCountResponse } from "./notification.types";
+import { NotificationFilterOptions, NotificationGroup, UnreadCountResponse } from "./notification.types";
 
 const getNotifications: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-  const result = await NotificationService.getGroupedNotifications(user.userId, req.query as NotificationFilterOptions);
+  const { data, meta } = await NotificationService.getGroupedNotifications(user.userId, req.query as NotificationFilterOptions);
 
-  sendResponse<NotificationListResponse>(res, {
+  sendResponse<NotificationGroup[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Notifications fetched successfully",
-    data: result,
+    data,
+    meta,
   });
 });
 

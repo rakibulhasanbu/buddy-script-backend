@@ -4,6 +4,9 @@ import { ApiError } from "@/errors/api-error";
 import prisma from "@/lib/prisma";
 import { NotificationService } from "@/modules/notification/notification.service";
 
+import { paginationHelpers } from "@/utils/pagination";
+import { PaginationOptions } from "@/types/pagination";
+
 import { FriendListResponse, FriendshipResponse, SendRequestInput, SuggestionListResponse } from "./friendship.types";
 
 const userSelect = {
@@ -212,7 +215,9 @@ const getFriends = async (currentUserId: string): Promise<FriendListResponse> =>
   return { data: friendships.map(buildFriendshipResponse) };
 };
 
-const getSuggestions = async (currentUserId: string): Promise<SuggestionListResponse> => {
+const getSuggestions = async (currentUserId: string, options: PaginationOptions = {}): Promise<SuggestionListResponse> => {
+  const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(options);
+
   const connectedUserIds = await prisma.friendship.findMany({
     where: {
       OR: [{ requesterId: currentUserId }, { addresseeId: currentUserId }],
@@ -229,15 +234,25 @@ const getSuggestions = async (currentUserId: string): Promise<SuggestionListResp
     excludedIds.add(friendship.addresseeId);
   });
 
-  const users = await prisma.user.findMany({
-    where: {
-      id: { notIn: Array.from(excludedIds) },
-    },
-    select: userSelect,
-    take: 20,
-  });
+  const whereCondition = {
+    id: { notIn: Array.from(excludedIds) },
+  };
 
-  return { data: users.map(buildFriendUser) };
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where: whereCondition,
+      select: userSelect,
+      skip,
+      take: limit,
+      orderBy: { [sortBy]: sortOrder },
+    }),
+    prisma.user.count({ where: whereCondition }),
+  ]);
+
+  return {
+    data: users.map(buildFriendUser),
+    meta: { page, limit, total },
+  };
 };
 
 export const FriendshipService = {

@@ -4,7 +4,7 @@ import { JwtPayload } from "jsonwebtoken";
 import { catchAsync } from "@/middlewares/catch-async";
 import { sendResponse } from "@/middlewares/send-response";
 import { PostService } from "./post.service";
-import { FeedResponse, PostResponse, UserPostsResponse } from "./post.types";
+import { PostResponse } from "./post.types";
 
 const createPost: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
@@ -22,16 +22,17 @@ const getFeed: RequestHandler = catchAsync(async (req: Request, res: Response) =
   const user = req.user as JwtPayload;
   const { cursor, limit } = req.query;
 
-  const result = await PostService.getFeed(user.userId, {
+  const { data, meta } = await PostService.getFeed(user.userId, {
     cursor: cursor as string | undefined,
     limit: limit ? Number(limit) : undefined,
   });
 
-  sendResponse<FeedResponse>(res, {
+  sendResponse<PostResponse[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Feed fetched successfully",
-    data: result,
+    data,
+    meta,
   });
 });
 
@@ -39,16 +40,17 @@ const getPostsByUser: RequestHandler = catchAsync(async (req: Request, res: Resp
   const user = req.user as JwtPayload;
   const { cursor, limit } = req.query;
 
-  const result = await PostService.getPostsByUserId(req.params.id, user.userId, {
+  const { data, meta } = await PostService.getPostsByUserId(req.params.id, user.userId, {
     cursor: cursor as string | undefined,
     limit: limit ? Number(limit) : undefined,
   });
 
-  sendResponse<UserPostsResponse>(res, {
+  sendResponse<PostResponse[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "User posts fetched successfully",
-    data: result,
+    data,
+    meta,
   });
 });
 

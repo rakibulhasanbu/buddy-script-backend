@@ -4,7 +4,7 @@ import { JwtPayload } from "jsonwebtoken";
 import { catchAsync } from "@/middlewares/catch-async";
 import { sendResponse } from "@/middlewares/send-response";
 import { ReactionService } from "./reaction.service";
-import { WhoReactedResponse } from "./reaction.types";
+import { ReactedUser } from "./reaction.types";
 
 const toggleReaction: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
@@ -22,18 +22,19 @@ const getWhoReacted: RequestHandler = catchAsync(async (req: Request, res: Respo
   const { entityType, entityId } = req.params;
   const { cursor, limit } = req.query;
 
-  const result = await ReactionService.getWhoReacted(
+  const { data, meta } = await ReactionService.getWhoReacted(
     entityType as "POST" | "COMMENT",
     entityId,
     cursor as string | undefined,
     limit ? Number(limit) : undefined,
   );
 
-  sendResponse<WhoReactedResponse>(res, {
+  sendResponse<ReactedUser[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Reactions fetched successfully",
-    data: result,
+    data,
+    meta,
   });
 });
 

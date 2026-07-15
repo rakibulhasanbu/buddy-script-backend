@@ -4,7 +4,7 @@ import { JwtPayload } from "jsonwebtoken";
 import { catchAsync } from "@/middlewares/catch-async";
 import { sendResponse } from "@/middlewares/send-response";
 import { CommentService } from "./comment.service";
-import { CommentListResponse, CommentResponse } from "./comment.types";
+import { CommentResponse } from "./comment.types";
 
 const createComment: RequestHandler = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
@@ -22,16 +22,17 @@ const getCommentsByPost: RequestHandler = catchAsync(async (req: Request, res: R
   const user = req.user as JwtPayload;
   const { cursor, limit } = req.query;
 
-  const result = await CommentService.getCommentsByPost(req.params.postId, user.userId, {
+  const { data, meta } = await CommentService.getCommentsByPost(req.params.postId, user.userId, {
     cursor: cursor as string | undefined,
     limit: limit ? Number(limit) : undefined,
   });
 
-  sendResponse<CommentListResponse>(res, {
+  sendResponse<CommentResponse[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Comments fetched successfully",
-    data: result,
+    data,
+    meta,
   });
 });
 
@@ -39,16 +40,17 @@ const getRepliesByComment: RequestHandler = catchAsync(async (req: Request, res:
   const user = req.user as JwtPayload;
   const { cursor, limit } = req.query;
 
-  const result = await CommentService.getRepliesByComment(req.params.commentId, user.userId, {
+  const { data, meta } = await CommentService.getRepliesByComment(req.params.commentId, user.userId, {
     cursor: cursor as string | undefined,
     limit: limit ? Number(limit) : undefined,
   });
 
-  sendResponse<CommentListResponse>(res, {
+  sendResponse<CommentResponse[]>(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Replies fetched successfully",
-    data: result,
+    data,
+    meta,
   });
 });
 
